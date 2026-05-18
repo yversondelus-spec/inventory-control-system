@@ -10,7 +10,9 @@ interface Summary {
   productosActivos: number;
   productosCriticos: number;
   quiebreStock: number;
+  stockCritico: number;
   stockBajo: number;
+  stockNormal: number;
   alertasActivas: number;
   alertasCriticas: number;
   capitalInmovilizado: number;
@@ -70,6 +72,7 @@ export default function DashboardPage() {
         const all = Array.isArray(items) ? items : [];
         const sorted = all
           .filter((p: Producto) => ['CRITICO', 'ALTO'].includes(p.criticidad))
+          .sort((a: Producto, b: Producto) => a.stockActual - b.stockActual)
           .slice(0, 8);
         setCriticos(sorted);
       })
@@ -89,9 +92,10 @@ export default function DashboardPage() {
   }
 
   const pieData = [
-    { name: 'Quiebre', value: summary?.quiebreStock ?? 0, color: '#ef4444' },
-    { name: 'Stock Bajo', value: Math.max(0, (summary?.stockBajo ?? 0) - (summary?.quiebreStock ?? 0)), color: '#f97316' },
-    { name: 'Normal', value: Math.max(0, (summary?.totalProductos ?? 0) - (summary?.stockBajo ?? 0)), color: '#22c55e' },
+    { name: 'Quiebre (0 UN)', value: summary?.quiebreStock ?? 0, color: '#ef4444' },
+    { name: 'Crítico (<20% mín)', value: summary?.stockCritico ?? 0, color: '#f97316' },
+    { name: 'Bajo (<mínimo)', value: summary?.stockBajo ?? 0, color: '#eab308' },
+    { name: 'Normal', value: summary?.stockNormal ?? 0, color: '#22c55e' },
   ].filter(d => d.value > 0);
 
   const barData = [
@@ -115,14 +119,38 @@ export default function DashboardPage() {
         <KPICard title="Productos Críticos" value={summary?.productosCriticos ?? 0}
           subtitle="Criticidad ALTO o CRÍTICO" icon={ShieldAlert} color="bg-orange-500" />
         <KPICard title="Quiebre de Stock" value={summary?.quiebreStock ?? 0}
-          subtitle="Productos sin unidades" icon={TrendingDown} color="bg-red-500" />
+          subtitle="Productos sin unidades (0 UN)" icon={TrendingDown} color="bg-red-500" />
         <KPICard title="Alertas Activas" value={summary?.alertasActivas ?? 0}
           subtitle={`${summary?.alertasCriticas ?? 0} críticas`} icon={AlertTriangle} color="bg-yellow-500" />
-        <KPICard title="Cobertura Promedio" value={`${summary?.coberturaPromedio?.toFixed(1) ?? 0} días`}
-          subtitle="Días de inventario disponible" icon={Activity} color="bg-green-500" />
+        <KPICard title="Cobertura Críticos" value={`${summary?.coberturaPromedio?.toFixed(1) ?? 0} días`}
+          subtitle="Días de stock productos ALTO/CRÍTICO" icon={Activity} color="bg-green-500" />
         <KPICard title="Capital Inmovilizado"
           value={`$${(summary?.capitalInmovilizado ?? 0).toLocaleString('es-CL')}`}
           subtitle="Valor total del inventario" icon={DollarSign} color="bg-purple-500" />
+      </div>
+
+      {/* Niveles de stock */}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="bg-red-50 rounded-xl border border-red-200 p-4 text-center">
+          <p className="text-xs font-medium text-red-500 mb-1">🔴 Quiebre</p>
+          <p className="text-2xl font-bold text-red-600">{summary?.quiebreStock ?? 0}</p>
+          <p className="text-xs text-red-400 mt-1">Stock = 0</p>
+        </div>
+        <div className="bg-orange-50 rounded-xl border border-orange-200 p-4 text-center">
+          <p className="text-xs font-medium text-orange-500 mb-1">🟠 Crítico</p>
+          <p className="text-2xl font-bold text-orange-600">{summary?.stockCritico ?? 0}</p>
+          <p className="text-xs text-orange-400 mt-1">Menos del 20% del mínimo</p>
+        </div>
+        <div className="bg-yellow-50 rounded-xl border border-yellow-200 p-4 text-center">
+          <p className="text-xs font-medium text-yellow-600 mb-1">🟡 Bajo</p>
+          <p className="text-2xl font-bold text-yellow-700">{summary?.stockBajo ?? 0}</p>
+          <p className="text-xs text-yellow-500 mt-1">Bajo el mínimo</p>
+        </div>
+        <div className="bg-green-50 rounded-xl border border-green-200 p-4 text-center">
+          <p className="text-xs font-medium text-green-600 mb-1">🟢 Normal</p>
+          <p className="text-2xl font-bold text-green-700">{summary?.stockNormal ?? 0}</p>
+          <p className="text-xs text-green-500 mt-1">Stock suficiente</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -159,7 +187,7 @@ export default function DashboardPage() {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold text-gray-800">Productos Críticos</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Requieren atención inmediata</p>
+          <p className="text-xs text-gray-400 mt-0.5">Ordenados por stock más bajo — requieren atención inmediata</p>
         </div>
         {criticos.length === 0 ? (
           <div className="px-6 py-10 text-center text-gray-400 text-sm">No hay productos críticos 🎉</div>
@@ -177,33 +205,44 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {criticos.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-3 font-mono text-xs text-gray-600">{p.codigoProducto}</td>
-                  <td className="px-6 py-3 text-gray-900 max-w-xs truncate">{p.descripcion}</td>
-                  <td className="px-6 py-3">
-                    {p.categoria && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
-                        style={{ backgroundColor: p.categoria.color ?? '#6366f1' }}>
-                        {p.categoria.nombre}
+              {criticos.map((p) => {
+                const pct = p.stockMinimo > 0 ? (p.stockActual / p.stockMinimo) * 100 : 100;
+                const rowColor = p.stockActual <= 0 ? 'bg-red-50' :
+                  pct < 20 ? 'bg-orange-50' :
+                  pct < 100 ? 'bg-yellow-50' : '';
+                return (
+                  <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${rowColor}`}>
+                    <td className="px-6 py-3 font-mono text-xs text-gray-600">{p.codigoProducto}</td>
+                    <td className="px-6 py-3 text-gray-900 max-w-xs truncate">{p.descripcion}</td>
+                    <td className="px-6 py-3">
+                      {p.categoria && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                          style={{ backgroundColor: p.categoria.color ?? '#6366f1' }}>
+                          {p.categoria.nombre}
+                        </span>
+                      )}
+                    </td>
+                    <td className={`px-6 py-3 text-right font-medium ${
+                      p.stockActual <= 0 ? 'text-red-600' :
+                      pct < 20 ? 'text-orange-600' : 'text-yellow-600'
+                    }`}>
+                      {p.stockActual} {p.unidadMedida}
+                    </td>
+                    <td className="px-6 py-3 text-right text-gray-500">{p.stockMinimo} {p.unidadMedida}</td>
+                    <td className="px-6 py-3 text-center text-gray-500">
+                      {p.stockMinimo > 0
+                        ? `${Math.round((p.stockActual / p.stockMinimo) * 30)}d`
+                        : '—'}
+                    </td>
+                    <td className="px-6 py-3 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{ backgroundColor: `${CRITICIDAD_COLORS[p.criticidad]}20`, color: CRITICIDAD_COLORS[p.criticidad] }}>
+                        {p.criticidad}
                       </span>
-                    )}
-                  </td>
-                  <td className={`px-6 py-3 text-right font-medium ${p.stockActual <= 0 ? 'text-red-600' : 'text-orange-600'}`}>
-                    {p.stockActual} {p.unidadMedida}
-                  </td>
-                  <td className="px-6 py-3 text-right text-gray-500">{p.stockMinimo} {p.unidadMedida}</td>
-                  <td className="px-6 py-3 text-center text-gray-500">
-                    {p.diasCobertura != null ? `${p.diasCobertura}d` : '—'}
-                  </td>
-                  <td className="px-6 py-3 text-center">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium"
-                      style={{ backgroundColor: `${CRITICIDAD_COLORS[p.criticidad]}20`, color: CRITICIDAD_COLORS[p.criticidad] }}>
-                      {p.criticidad}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

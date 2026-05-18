@@ -17,14 +17,12 @@ export class InventoryService {
     const [
       totalProductos,
       productosActivos,
-      quiebreStock,
       alertasActivas,
       alertasCriticas,
       productosCriticos,
     ] = await this.prisma.$transaction([
       this.prisma.producto.count(),
       this.prisma.producto.count({ where: { activo: true } }),
-      this.prisma.producto.count({ where: { activo: true, stockActual: { lte: 0 } } }),
       this.prisma.alerta.count({ where: { estado: 'ACTIVA' } }),
       this.prisma.alerta.count({ where: { estado: 'ACTIVA', prioridad: 'CRITICA' } }),
       this.prisma.producto.count({
@@ -32,37 +30,46 @@ export class InventoryService {
       }),
     ]);
 
-    const productosCriticosData = await this.prisma.producto.findMany({
-      where: {
-        activo: true,
-        criticidad: { in: ['ALTO', 'CRITICO'] },
-        stockMinimo: { gt: 0 },
-      },
-      select: { stockActual: true, stockMinimo: true },
-    });
-
-    const coberturaPromedio =
-      productosCriticosData.length > 0
-        ? productosCriticosData.reduce((acc, p) => {
-            return acc + (p.stockActual / p.stockMinimo) * 30;
-          }, 0) / productosCriticosData.length
-        : 0;
-
-    const todosProductos = await this.prisma.producto.findMany({
+    const productos = await this.prisma.producto.findMany({
       where: { activo: true },
-      select: { stockActual: true, precioUnitario: true },
+      select: { stockActual: true, stockMinimo: true, precioUnitario: true, criticidad: true },
     });
 
-    const capitalInmovilizado = todosProductos.reduce((acc, p) => {
-      return acc + p.stockActual * (p.precioUnitario ?? 0);
-    }, 0);
+    // 4 niveles de stock
+    const quiebreStock = productos.filter(p => p.stockActual <= 0).length;
+    const stockCritico = productos.filter(p =>
+      p.stockActual > 0 && p.stockMinimo > 0 && p.stockActual < p.stockMinimo * 0.2
+    ).length;
+    const stockBajo = productos.filter(p =>
+      p.stockMinimo > 0 && p.stockActual >= p.stockMinimo * 0.2 && p.stockActual < p.stockMinimo
+    ).length;
+    const stockNormal = productos.filter(p =>
+      p.stockMinimo === 0 || p.stockActual >= p.stockMinimo
+    ).length;
+
+    // Cobertura solo productos CRITICO/ALTO
+    const productosCriticosData = productos.filter(p =>
+      ['ALTO', 'CRITICO'].includes(p.criticidad) && p.stockMinimo > 0
+    );
+    const coberturaPromedio = productosCriticosData.length > 0
+      ? productosCriticosData.reduce((acc, p) =>
+          acc + (p.stockActual / p.stockMinimo) * 30, 0
+        ) / productosCriticosData.length
+      : 0;
+
+    // Capital inmovilizado
+    const capitalInmovilizado = productos.reduce((acc, p) =>
+      acc + p.stockActual * (p.precioUnitario ?? 0), 0
+    );
 
     return {
       totalProductos,
       productosActivos,
       productosCriticos,
       quiebreStock,
-      stockBajo: 0,
+      stockCritico,
+      stockBajo,
+      stockNormal,
       alertasActivas,
       alertasCriticas,
       capitalInmovilizado,
@@ -176,16 +183,13 @@ export class InventoryService {
       const porcentajeDiff =
         stockAnterior > 0 ? Math.abs(diferencia / stockAnterior) * 100 : 0;
 
-      // Actualizar stock del producto
       await this.prisma.producto.update({
         where: { id: product.id },
         data: { stockActual: stockNuevo },
       });
 
-      // Crear movimiento si hay diferencia
       if (diferencia !== 0) {
         const tipo = diferencia > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO';
-
         await this.prisma.movimiento.create({
           data: {
             productoId: product.id,
@@ -202,7 +206,6 @@ export class InventoryService {
         });
       }
 
-      // Guardar diferencia si es significativa (> 1%)
       if (Math.abs(porcentajeDiff) > 1) {
         await this.prisma.sapDiferencia.create({
           data: {
