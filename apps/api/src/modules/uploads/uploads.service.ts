@@ -36,7 +36,7 @@ export class UploadsService {
     return new Date();
   }
 
-  async processUpload(file: Express.Multer.File, usuarioId: string) {
+  async processUpload(file: any, usuarioId: string) {
     const upload = await this.prisma.upload.create({
       data: {
         usuarioId,

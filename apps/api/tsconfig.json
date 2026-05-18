@@ -12,6 +12,7 @@
     "strict": false,
     "strictPropertyInitialization": false,
     "noImplicitAny": false,
+    "noEmitOnError": false,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "esModuleInterop": true,

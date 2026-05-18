@@ -39,7 +39,7 @@ export class UploadsController {
       limits: { fileSize: 50 * 1024 * 1024 },
     }),
   )
-  async upload(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
+  async upload(@UploadedFile() file: any, @Request() req: any) {
     if (!file) throw new BadRequestException('No se recibió ningún archivo');
     const userId = req.user?.sub ?? req.user?.id ?? req.user?.userId;
     return this.uploadsService.processUpload(file, userId);
