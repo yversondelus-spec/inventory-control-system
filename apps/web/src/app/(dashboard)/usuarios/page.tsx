@@ -32,7 +32,7 @@ export default function UsuariosPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/users', {
+      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}"}/users', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
@@ -49,7 +49,7 @@ export default function UsuariosPage() {
     setMensaje(null);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/users', {
+      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}"}/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(form),
@@ -71,7 +71,7 @@ export default function UsuariosPage() {
   async function cambiarRol(id: string, role: string) {
     try {
       const token = localStorage.getItem('access_token');
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/users/${id}/role`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}"}/users/${id}/role`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ role }),
@@ -85,7 +85,7 @@ export default function UsuariosPage() {
   async function toggleActivo(id: string, activo: boolean) {
     try {
       const token = localStorage.getItem('access_token');
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/users/${id}/toggle`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}"}/users/${id}/toggle`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ activo }),
