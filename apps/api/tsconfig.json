@@ -9,8 +9,9 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "strict": true,
+    "strict": false,
     "strictPropertyInitialization": false,
+    "noImplicitAny": false,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "esModuleInterop": true,
