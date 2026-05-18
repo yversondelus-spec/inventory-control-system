@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import type { UserRole } from '@repo/shared-types';
+import type { UserRole } from '@/types/shared';
 
 interface AuthUser {
   id: string;
