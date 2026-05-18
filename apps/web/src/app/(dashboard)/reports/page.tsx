@@ -79,7 +79,7 @@ export default function ReportesPage() {
         setProductos(Array.isArray(items) ? items : []);
       } else if (tab === 'movimientos') {
         const token = localStorage.getItem('accessToken');
-        const res = await fetch('http://localhost:3001/api/v1/movements?limit=200', {
+        const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/movements?limit=200', {
           headers: { Authorization: `Bearer ${token}` },
         });
         const json = await res.json();

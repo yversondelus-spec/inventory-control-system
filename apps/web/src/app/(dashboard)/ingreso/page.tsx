@@ -43,7 +43,7 @@ export default function IngresoManualPage() {
 
   async function fetchProductos() {
     const token = localStorage.getItem('access_token');
-    const res = await fetch('http://localhost:3001/api/v1/products?limit=500', {
+    const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/products?limit=500', {
       headers: { Authorization: `Bearer ${token}` },
     });
     const json = await res.json();
@@ -56,7 +56,7 @@ export default function IngresoManualPage() {
     setMensaje(null);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('http://localhost:3001/api/v1/products', {
+      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/products', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,7 +97,7 @@ export default function IngresoManualPage() {
 
       if (stockNuevo < 0) throw new Error('Stock insuficiente para la salida');
 
-      const res = await fetch(`http://localhost:3001/api/v1/products/${producto.id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/products/${producto.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ stockActual: stockNuevo }),
