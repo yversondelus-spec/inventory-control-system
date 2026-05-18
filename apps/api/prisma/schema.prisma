@@ -1,0 +1,416 @@
+// ─────────────────────────────────────────────────────────
+// inventory-control-system — Prisma Schema
+// ─────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum UserRole {
+  ADMINISTRADOR
+  SUPERVISOR
+  OPERADOR
+}
+
+enum Criticidad {
+  CRITICO
+  ALTO
+  MEDIO
+  BAJO
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE_POSITIVO
+  AJUSTE_NEGATIVO
+  TRANSFERENCIA
+  DEVOLUCION
+  MERMA
+}
+
+enum TipoAlerta {
+  STOCK_BAJO
+  QUIEBRE_STOCK
+  DIFERENCIA_SAP
+  PRODUCTO_CRITICO
+  ANOMALIA_CONSUMO
+  SOBRECONSUMO
+  REPOSICION_URGENTE
+  LEAD_TIME_VENCIDO
+  INVENTARIO_PENDIENTE
+}
+
+enum PrioridadAlerta {
+  CRITICA
+  ALTA
+  MEDIA
+  BAJA
+}
+
+enum EstadoAlerta {
+  ACTIVA
+  RECONOCIDA
+  RESUELTA
+  DESCARTADA
+}
+
+enum EstadoUpload {
+  PENDIENTE
+  PROCESANDO
+  COMPLETADO
+  ERROR
+  PARCIAL
+}
+
+enum EstadoSolicitud {
+  PENDIENTE
+  ENVIADA
+  EN_PROCESO
+  COMPLETADA
+  CANCELADA
+}
+
+// ─────────────────────────────────────────
+// USUARIOS
+// ─────────────────────────────────────────
+
+model Usuario {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  nombre       String
+  apellido     String
+  passwordHash String    @map("password_hash")
+  role         UserRole  @default(OPERADOR)
+  activo       Boolean   @default(true)
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  uploads            Upload[]
+  auditoria          Auditoria[]
+  alertasReconocidas Alerta[]    @relation("AlertaAcknowledgedBy")
+
+  @@index([email])
+  @@map("usuarios")
+}
+
+// ─────────────────────────────────────────
+// ESTRUCTURA
+// ─────────────────────────────────────────
+
+model Categoria {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  descripcion String?
+  color       String?  @default("#6366f1")
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  productos Producto[]
+
+  @@map("categorias")
+}
+
+model Bodega {
+  id        String   @id @default(cuid())
+  codigo    String   @unique
+  nombre    String
+  ubicacion String?
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  inventarios Inventario[]
+  movimientos Movimiento[]
+
+  @@map("bodegas")
+}
+
+model Proveedor {
+  id           String   @id @default(cuid())
+  codigo       String   @unique
+  nombre       String
+  contacto     String?
+  email        String?
+  telefono     String?
+  leadTimeDias Int      @default(21) @map("lead_time_dias")
+  confiabilidad Float?  @default(0.95)
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  productos Producto[]
+
+  @@map("proveedores")
+}
+
+// ─────────────────────────────────────────
+// PRODUCTOS
+// ─────────────────────────────────────────
+
+model Producto {
+  id             String     @id @default(cuid())
+  codigoProducto String     @unique @map("codigo_producto")
+  codigoSap      String?    @unique @map("codigo_sap")
+  descripcion    String
+  unidadMedida   String     @default("UN") @map("unidad_medida")
+  categoriaId    String     @map("categoria_id")
+  proveedorId    String?    @map("proveedor_id")
+
+  stockActual    Float      @default(0) @map("stock_actual")
+  stockMinimo    Float      @default(0) @map("stock_minimo")
+  stockMaximo    Float?     @map("stock_maximo")
+  stockSeguridad Float      @default(0) @map("stock_seguridad")
+  puntoPedido    Float      @default(0) @map("punto_pedido")
+
+  leadTimeDias   Int        @default(21) @map("lead_time_dias")
+
+  criticidad     Criticidad @default(MEDIO)
+  precioUnitario Float?     @map("precio_unitario")
+  demandaPromedio Float?    @map("demanda_promedio")
+  diasCobertura  Float?     @map("dias_cobertura")
+  ultimoMovimiento DateTime? @map("ultimo_movimiento")
+
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  categoria        Categoria             @relation(fields: [categoriaId], references: [id])
+  proveedor        Proveedor?            @relation(fields: [proveedorId], references: [id])
+  movimientos      Movimiento[]
+  inventarios      Inventario[]
+  alertas          Alerta[]
+  consumoHistorico ConsumoHistorico[]
+  sapDiferencias   SapDiferencia[]
+  solicitudes      SolicitudReposicion[]
+
+  @@index([codigoProducto])
+  @@index([codigoSap])
+  @@index([criticidad])
+  @@index([stockActual])
+  @@index([categoriaId])
+  @@index([activo])
+  @@map("productos")
+}
+
+// ─────────────────────────────────────────
+// MOVIMIENTOS E INVENTARIO
+// ─────────────────────────────────────────
+
+model Movimiento {
+  id              String         @id @default(cuid())
+  productoId      String         @map("producto_id")
+  bodegaId        String?        @map("bodega_id")
+  tipo            TipoMovimiento
+  cantidad        Float
+  cantidadAntes   Float          @map("cantidad_antes")
+  cantidadDespues Float          @map("cantidad_despues")
+  fecha           DateTime
+  referencia      String?
+  origen          String?        @default("MANUAL")
+  uploadId        String?        @map("upload_id")
+  usuarioId       String?        @map("usuario_id")
+  observacion     String?
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  producto Producto @relation(fields: [productoId], references: [id])
+  bodega   Bodega?  @relation(fields: [bodegaId], references: [id])
+  upload   Upload?  @relation(fields: [uploadId], references: [id])
+
+  @@index([productoId])
+  @@index([fecha])
+  @@index([tipo])
+  @@index([uploadId])
+  @@map("movimientos")
+}
+
+model Inventario {
+  id          String   @id @default(cuid())
+  productoId  String   @map("producto_id")
+  bodegaId    String   @map("bodega_id")
+  stockFisico Float    @map("stock_fisico")
+  stockSap    Float    @map("stock_sap")
+  diferencia  Float
+  fechaConteo DateTime @map("fecha_conteo")
+  uploadId    String?  @map("upload_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  producto Producto @relation(fields: [productoId], references: [id])
+  bodega   Bodega   @relation(fields: [bodegaId], references: [id])
+  upload   Upload?  @relation(fields: [uploadId], references: [id])
+
+  @@index([productoId])
+  @@index([fechaConteo])
+  @@map("inventario")
+}
+
+model SapDiferencia {
+  id             String   @id @default(cuid())
+  productoId     String   @map("producto_id")
+  stockSistema   Float    @map("stock_sistema")
+  stockSap       Float    @map("stock_sap")
+  diferencia     Float
+  porcentajeDiff Float    @map("porcentaje_diff")
+  uploadId       String   @map("upload_id")
+  fechaDeteccion DateTime @default(now()) @map("fecha_deteccion")
+  resuelto       Boolean  @default(false)
+
+  producto Producto @relation(fields: [productoId], references: [id])
+  upload   Upload   @relation(fields: [uploadId], references: [id])
+
+  @@index([productoId])
+  @@index([resuelto])
+  @@map("sap_diferencias")
+}
+
+model ConsumoHistorico {
+  id                String   @id @default(cuid())
+  productoId        String   @map("producto_id")
+  periodo           DateTime
+  tipoPeriodo       String   @map("tipo_periodo")
+  consumoTotal      Float    @map("consumo_total")
+  consumoPromedio   Float    @map("consumo_promedio")
+  consumoMaximo     Float    @map("consumo_maximo")
+  consumoMinimo     Float    @map("consumo_minimo")
+  diasConMovimiento Int      @map("dias_con_movimiento")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  producto Producto @relation(fields: [productoId], references: [id])
+
+  @@unique([productoId, periodo, tipoPeriodo])
+  @@index([productoId])
+  @@index([periodo])
+  @@map("consumo_historico")
+}
+
+// ─────────────────────────────────────────
+// ALERTAS
+// ─────────────────────────────────────────
+
+model Alerta {
+  id             String          @id @default(cuid())
+  productoId     String          @map("producto_id")
+  tipo           TipoAlerta
+  prioridad      PrioridadAlerta @default(MEDIA)
+  estado         EstadoAlerta    @default(ACTIVA)
+  mensaje        String
+  detalles       Json?
+  valorActual    Float?          @map("valor_actual")
+  valorUmbral    Float?          @map("valor_umbral")
+  acknowledgedBy String?         @map("acknowledged_by")
+  acknowledgedAt DateTime?       @map("acknowledged_at")
+  resolvedAt     DateTime?       @map("resolved_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  producto         Producto @relation(fields: [productoId], references: [id])
+  acknowledgedUser Usuario? @relation("AlertaAcknowledgedBy", fields: [acknowledgedBy], references: [id])
+
+  @@index([productoId])
+  @@index([estado])
+  @@index([tipo])
+  @@index([prioridad])
+  @@index([createdAt])
+  @@map("alertas")
+}
+
+// ─────────────────────────────────────────
+// SOLICITUDES DE REPOSICIÓN
+// ─────────────────────────────────────────
+
+model SolicitudReposicion {
+  id         String          @id @default(cuid())
+  productoId String          @map("producto_id")
+  alertaId   String?         @map("alerta_id")
+  cantidad   Float
+  estado     EstadoSolicitud @default(PENDIENTE)
+  prioridad  String          @default("NORMAL")
+  notas      String?
+  creadoPor  String?         @map("creado_por")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+
+  producto Producto @relation(fields: [productoId], references: [id])
+
+  @@index([productoId])
+  @@index([estado])
+  @@map("solicitudes_reposicion")
+}
+
+// ─────────────────────────────────────────
+// UPLOADS
+// ─────────────────────────────────────────
+
+model Upload {
+  id                  String       @id @default(cuid())
+  usuarioId           String       @map("usuario_id")
+  nombreArchivo       String       @map("nombre_archivo")
+  tipoArchivo         String       @map("tipo_archivo")
+  tamanoBytes         Int          @map("tamano_bytes")
+  estado              EstadoUpload @default(PENDIENTE)
+  filePath            String?      @map("file_path")
+  totalRegistros      Int?         @map("total_registros")
+  registrosProcesados Int?         @map("registros_procesados")
+  registrosError      Int?         @map("registros_error")
+  errores             Json?
+  metadata            Json?
+  procesadoAt         DateTime?    @map("procesado_at")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  usuario     Usuario         @relation(fields: [usuarioId], references: [id])
+  movimientos Movimiento[]
+  inventarios Inventario[]
+  diferencias SapDiferencia[]
+
+  @@index([estado])
+  @@index([usuarioId])
+  @@index([createdAt])
+  @@map("uploads")
+}
+
+// ─────────────────────────────────────────
+// AUDITORÍA Y CONFIGURACIÓN
+// ─────────────────────────────────────────
+
+model Auditoria {
+  id           String   @id @default(cuid())
+  usuarioId    String?  @map("usuario_id")
+  accion       String
+  entidad      String
+  entidadId    String?  @map("entidad_id")
+  datosAntes   Json?    @map("datos_antes")
+  datosDespues Json?    @map("datos_despues")
+  ip           String?
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@index([usuarioId])
+  @@index([entidad])
+  @@index([createdAt])
+  @@map("auditoria")
+}
+
+model Configuracion {
+  id          String   @id @default(cuid())
+  clave       String   @unique
+  valor       String
+  descripcion String?
+  tipo        String   @default("string")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("configuracion")
+}

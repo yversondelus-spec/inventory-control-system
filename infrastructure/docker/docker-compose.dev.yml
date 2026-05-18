@@ -1,0 +1,43 @@
+version: '3.9'
+
+name: inventory-control-dev
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: ics-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  analytics:
+    build:
+      context: ../../apps/analytics
+      dockerfile: Dockerfile
+    container_name: ics-analytics
+    restart: unless-stopped
+    ports:
+      - '8001:8001'
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ../../apps/analytics:/app
+    command: uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8001
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8001/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redis-data:
+    name: ics-redis-data
