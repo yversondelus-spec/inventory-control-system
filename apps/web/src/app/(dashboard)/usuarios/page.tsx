@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Users, Plus, Save, X, Shield, UserCheck, UserX } from 'lucide-react';
+import { Users, Plus, Save, X, UserCheck, UserX } from 'lucide-react';
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 
 const ROLES = ['ADMINISTRADOR', 'SUPERVISOR', 'OPERADOR'];
 
@@ -19,11 +21,7 @@ export default function UsuariosPage() {
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
-    email: '',
-    nombre: '',
-    apellido: '',
-    role: 'OPERADOR',
-    password: '',
+    email: '', nombre: '', apellido: '', role: 'OPERADOR', password: '',
   });
 
   useEffect(() => { fetchUsuarios(); }, []);
@@ -32,7 +30,7 @@ export default function UsuariosPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}"}/users', {
+      const res = await fetch(`${API}/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
@@ -49,7 +47,7 @@ export default function UsuariosPage() {
     setMensaje(null);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}"}/users', {
+      const res = await fetch(`${API}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(form),
@@ -71,7 +69,7 @@ export default function UsuariosPage() {
   async function cambiarRol(id: string, role: string) {
     try {
       const token = localStorage.getItem('access_token');
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}"}/users/${id}/role`, {
+      await fetch(`${API}/users/${id}/role`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ role }),
@@ -85,7 +83,7 @@ export default function UsuariosPage() {
   async function toggleActivo(id: string, activo: boolean) {
     try {
       const token = localStorage.getItem('access_token');
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}"}/users/${id}/toggle`, {
+      await fetch(`${API}/users/${id}/toggle`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ activo }),
@@ -225,9 +223,7 @@ export default function UsuariosPage() {
                   <td className="px-6 py-3 text-center">
                     <button onClick={() => toggleActivo(u.id, !u.activo)}
                       className={`p-1.5 rounded-lg transition-colors ${
-                        u.activo
-                          ? 'text-red-400 hover:bg-red-50'
-                          : 'text-green-500 hover:bg-green-50'
+                        u.activo ? 'text-red-400 hover:bg-red-50' : 'text-green-500 hover:bg-green-50'
                       }`}
                       title={u.activo ? 'Desactivar' : 'Activar'}>
                       {u.activo ? <UserX size={16} /> : <UserCheck size={16} />}
