@@ -55,18 +55,16 @@ export class AlertsService {
   }
 
   async getSummary() {
-    const [byPrioridad, byTipo, totalActivas] = await this.prisma.$transaction([
+    const [byPrioridad, byTipo, totalActivas] = await Promise.all([
       this.prisma.alerta.groupBy({
         by: ['prioridad'],
         where: { estado: 'ACTIVA' },
         _count: { id: true },
-        orderBy: { prioridad: 'asc' },
       }),
       this.prisma.alerta.groupBy({
         by: ['tipo'],
         where: { estado: 'ACTIVA' },
         _count: { id: true },
-        orderBy: { tipo: 'asc' },
       }),
       this.prisma.alerta.count({ where: { estado: 'ACTIVA' } }),
     ]);
