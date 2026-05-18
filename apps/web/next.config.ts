@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   experimental: {
     typedRoutes: false,
   },
+  generateBuildId: async () => {
+    return `build-${Date.now()}`;
+  },
 };
 
 export default nextConfig;
