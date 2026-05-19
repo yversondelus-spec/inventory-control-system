@@ -2,7 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
-import { ClipboardList, CheckCircle, Clock, Send, XCircle, RefreshCw, Zap } from 'lucide-react';
+import { ClipboardList, CheckCircle, Clock, Send, XCircle, RefreshCw, FileText, Plus, Minus } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+
+interface Producto {
+  id: string;
+  codigoProducto: string;
+  descripcion: string;
+  stockActual: number;
+  stockMinimo: number;
+  unidadMedida: string;
+  criticidad: string;
+  categoria?: { nombre: string; color: string };
+}
 
 interface Solicitud {
   id: string;
@@ -11,15 +26,12 @@ interface Solicitud {
   prioridad: string;
   notas: string | null;
   createdAt: string;
-  producto: {
-    codigoProducto: string;
-    descripcion: string;
-    stockActual: number;
-    stockMinimo: number;
-    unidadMedida: string;
-    criticidad: string;
-    categoria?: { nombre: string; color: string };
-  };
+  producto: Producto;
+}
+
+interface ProductoSeleccionado extends Producto {
+  cantidadSolicitada: number;
+  prioridad: 'URGENTE' | 'NORMAL';
 }
 
 const ESTADO_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
@@ -39,27 +51,37 @@ const ESTADOS_SIGUIENTES: Record<string, string[]> = {
 };
 
 export default function SolicitudesPage() {
+  const [tab, setTab] = useState<'nueva' | 'historial'>('nueva');
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [summary, setSummary] = useState({ pendientes: 0, enviadas: 0, enProceso: 0, completadas: 0 });
   const [loading, setLoading] = useState(true);
-  const [generando, setGenerando] = useState(false);
-  const [filtro, setFiltro] = useState('TODAS');
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [seleccionados, setSeleccionados] = useState<Record<string, ProductoSeleccionado>>({});
+  const [filtroNivel, setFiltroNivel] = useState<'TODOS' | 'CRITICO' | 'ALTO'>('TODOS');
   const [procesando, setProcesando] = useState<string | null>(null);
+  const [generandoPDF, setGenerandoPDF] = useState(false);
+  const [notas, setNotas] = useState('');
 
   useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
     setLoading(true);
     try {
-      const [solRes, sumRes] = await Promise.all([
+      const [solRes, sumRes, prodRes] = await Promise.all([
         apiClient.get('/solicitudes?limit=200'),
         apiClient.get('/solicitudes/summary'),
+        apiClient.get('/products?limit=500'),
       ]);
-      const solData = solRes.data?.data ?? solRes.data;
-      const items = solData?.data ?? solData ?? [];
+      const items = solRes.data?.data?.data ?? solRes.data?.data ?? [];
       setSolicitudes(Array.isArray(items) ? items : []);
-      const sum = sumRes.data?.data ?? sumRes.data;
-      setSummary(sum ?? { pendientes: 0, enviadas: 0, enProceso: 0, completadas: 0 });
+      setSummary(sumRes.data?.data ?? { pendientes: 0, enviadas: 0, enProceso: 0, completadas: 0 });
+      const prods = prodRes.data?.data?.data ?? prodRes.data?.data ?? [];
+      const criticos = Array.isArray(prods)
+        ? prods.filter((p: Producto) =>
+            ['CRITICO', 'ALTO'].includes(p.criticidad) && p.stockActual < p.stockMinimo
+          ).sort((a: Producto, b: Producto) => a.stockActual - b.stockActual)
+        : [];
+      setProductos(criticos);
     } catch {
       setSolicitudes([]);
     } finally {
@@ -67,18 +89,154 @@ export default function SolicitudesPage() {
     }
   }
 
-  async function generarDesdeAlertas() {
-    setGenerando(true);
+  function toggleSeleccion(producto: Producto) {
+    setSeleccionados(prev => {
+      if (prev[producto.id]) {
+        const next = { ...prev };
+        delete next[producto.id];
+        return next;
+      }
+      const cantidadSugerida = Math.max(producto.stockMinimo - producto.stockActual, 1);
+      return {
+        ...prev,
+        [producto.id]: {
+          ...producto,
+          cantidadSolicitada: cantidadSugerida,
+          prioridad: producto.criticidad === 'CRITICO' ? 'URGENTE' : 'NORMAL',
+        },
+      };
+    });
+  }
+
+  function updateCantidad(id: string, delta: number) {
+    setSeleccionados(prev => ({
+      ...prev,
+      [id]: { ...prev[id], cantidadSolicitada: Math.max(1, prev[id].cantidadSolicitada + delta) },
+    }));
+  }
+
+  function updatePrioridad(id: string, prioridad: 'URGENTE' | 'NORMAL') {
+    setSeleccionados(prev => ({ ...prev, [id]: { ...prev[id], prioridad } }));
+  }
+
+  async function generarSolicitudes() {
+    const items = Object.values(seleccionados);
+    if (items.length === 0) return alert('Selecciona al menos un producto');
+    setProcesando('generar');
     try {
-      const res = await apiClient.post('/solicitudes/generar-desde-alertas');
-      const { creadas } = res.data?.data ?? res.data;
-      alert(`✅ ${creadas} solicitudes generadas desde alertas activas`);
+      for (const item of items) {
+        await apiClient.post('/solicitudes', {
+          productoId: item.id,
+          cantidad: item.cantidadSolicitada,
+          prioridad: item.prioridad,
+          notas,
+        });
+      }
+      setSeleccionados({});
+      setNotas('');
       await fetchData();
+      setTab('historial');
+      alert(`✅ ${items.length} solicitudes generadas correctamente`);
     } catch {
       alert('Error al generar solicitudes');
     } finally {
-      setGenerando(false);
+      setProcesando(null);
     }
+  }
+
+  function generarPDF() {
+    const items = Object.values(seleccionados);
+    if (items.length === 0) return alert('Selecciona al menos un producto');
+    setGenerandoPDF(true);
+
+    const doc = new jsPDF();
+    const fecha = new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' });
+    const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+
+    // Header
+    doc.setFillColor(10, 22, 40);
+    doc.rect(0, 0, 210, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AEROSAN', 14, 15);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('GROUND HANDLING SERVICES', 14, 21);
+    doc.setFontSize(8);
+    doc.text('Sistema de Abastecimiento', 14, 27);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SOLICITUD DE REPOSICIÓN', 210 - 14, 18, { align: 'right' });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Fecha: ${fecha} ${hora}`, 210 - 14, 25, { align: 'right' });
+
+    // Info
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generado por: Sistema WMS Aerosan`, 14, 44);
+    doc.text(`Total productos: ${items.length}`, 14, 50);
+    doc.text(`Urgentes: ${items.filter(i => i.prioridad === 'URGENTE').length}`, 14, 56);
+    if (notas) {
+      doc.text(`Notas: ${notas}`, 14, 62);
+    }
+
+    // Tabla
+    const urgentes = items.filter(i => i.prioridad === 'URGENTE');
+    const normales = items.filter(i => i.prioridad === 'NORMAL');
+    const ordenados = [...urgentes, ...normales];
+
+    autoTable(doc, {
+      startY: notas ? 68 : 62,
+      head: [['#', 'Código', 'Descripción', 'Categoría', 'Stock Actual', 'Stock Mínimo', 'Cantidad a Pedir', 'Prioridad']],
+      body: ordenados.map((p, i) => [
+        i + 1,
+        p.codigoProducto,
+        p.descripcion,
+        p.categoria?.nombre ?? '—',
+        `${p.stockActual} ${p.unidadMedida}`,
+        `${p.stockMinimo} ${p.unidadMedida}`,
+        `${p.cantidadSolicitada} ${p.unidadMedida}`,
+        p.prioridad,
+      ]),
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [10, 22, 40], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+      alternateRowStyles: { fillColor: [248, 249, 250] },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 8 },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 50 },
+        3: { cellWidth: 22 },
+        4: { halign: 'center', cellWidth: 20 },
+        5: { halign: 'center', cellWidth: 20 },
+        6: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
+        7: { halign: 'center', cellWidth: 18 },
+      },
+      didDrawCell: (data) => {
+        if (data.column.index === 7 && data.section === 'body') {
+          const val = data.cell.text[0];
+          if (val === 'URGENTE') {
+            doc.setTextColor(220, 38, 38);
+          } else {
+            doc.setTextColor(34, 197, 94);
+          }
+        }
+      },
+    });
+
+    // Footer
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, finalY, 196, finalY);
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Aerosan Ground Handling Services — Sistema de Abastecimiento WMS', 105, finalY + 5, { align: 'center' });
+    doc.text(`Documento generado el ${fecha} a las ${hora}`, 105, finalY + 9, { align: 'center' });
+
+    doc.save(`solicitud-reposicion-${new Date().toISOString().split('T')[0]}.pdf`);
+    setGenerandoPDF(false);
   }
 
   async function cambiarEstado(id: string, estado: string) {
@@ -91,7 +249,11 @@ export default function SolicitudesPage() {
     }
   }
 
-  const filtradas = filtro === 'TODAS' ? solicitudes : solicitudes.filter(s => s.estado === filtro);
+  const productosFiltrados = filtroNivel === 'TODOS'
+    ? productos
+    : productos.filter(p => p.criticidad === filtroNivel);
+
+  const cantidadSeleccionada = Object.keys(seleccionados).length;
 
   return (
     <div className="p-8 space-y-6">
@@ -100,14 +262,25 @@ export default function SolicitudesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Solicitudes de Reposición</h1>
           <p className="text-gray-500 text-sm mt-1">Gestión de órdenes de reposición de stock</p>
         </div>
-        <button onClick={generarDesdeAlertas} disabled={generando}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
-          style={{ backgroundColor: '#1a6ebf' }}>
-          <Zap size={16} />
-          {generando ? 'Generando...' : 'Generar desde alertas'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setTab('nueva')}
+            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              tab === 'nueva' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}>
+            <Plus size={16} className="inline mr-1" />
+            Nueva Solicitud
+          </button>
+          <button onClick={() => setTab('historial')}
+            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              tab === 'historial' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}>
+            <ClipboardList size={16} className="inline mr-1" />
+            Historial ({solicitudes.length})
+          </button>
+        </div>
       </div>
 
+      {/* KPIs */}
       <div className="grid grid-cols-4 gap-4">
         {[
           { label: 'Pendientes',  value: summary.pendientes,  color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
@@ -122,105 +295,278 @@ export default function SolicitudesPage() {
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-3 border-b border-gray-100 flex gap-2 flex-wrap">
-          {['TODAS', 'PENDIENTE', 'ENVIADA', 'EN_PROCESO', 'COMPLETADA', 'CANCELADA'].map(f => (
-            <button key={f} onClick={() => setFiltro(f)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                filtro === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}>
-              {f === 'TODAS' ? `Todas (${solicitudes.length})` : ESTADO_CONFIG[f]?.label}
-            </button>
-          ))}
-        </div>
+      {tab === 'nueva' && (
+        <div className="space-y-4">
+          {/* Filtros y acciones */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              {(['TODOS', 'CRITICO', 'ALTO'] as const).map(f => (
+                <button key={f} onClick={() => setFiltroNivel(f)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    filtroNivel === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}>
+                  {f === 'TODOS' ? `Todos (${productos.length})` : `${f} (${productos.filter(p => p.criticidad === f).length})`}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              {cantidadSeleccionada > 0 && (
+                <span className="text-sm text-gray-500">{cantidadSeleccionada} productos seleccionados</span>
+              )}
+              <button onClick={generarPDF} disabled={generandoPDF || cantidadSeleccionada === 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+                <FileText size={15} />
+                {generandoPDF ? 'Generando...' : 'Descargar PDF'}
+              </button>
+              <button onClick={generarSolicitudes} disabled={procesando === 'generar' || cantidadSeleccionada === 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 transition-colors"
+                style={{ backgroundColor: '#1a6ebf' }}>
+                <Send size={15} />
+                {procesando === 'generar' ? 'Generando...' : `Generar Solicitud (${cantidadSeleccionada})`}
+              </button>
+            </div>
+          </div>
 
-        {loading ? (
-          <div className="p-6 space-y-3 animate-pulse">
-            {[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-gray-100 rounded-lg" />)}
-          </div>
-        ) : filtradas.length === 0 ? (
-          <div className="px-6 py-12 text-center text-gray-400">
-            <ClipboardList size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No hay solicitudes</p>
-            <p className="text-xs mt-1">Haz click en "Generar desde alertas" para crear solicitudes automáticamente</p>
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-6 py-3 font-medium text-gray-500">Producto</th>
-                <th className="text-left px-6 py-3 font-medium text-gray-500">Categoría</th>
-                <th className="text-right px-6 py-3 font-medium text-gray-500">Stock actual</th>
-                <th className="text-right px-6 py-3 font-medium text-gray-500">Cantidad solicitada</th>
-                <th className="text-center px-6 py-3 font-medium text-gray-500">Prioridad</th>
-                <th className="text-center px-6 py-3 font-medium text-gray-500">Estado</th>
-                <th className="text-center px-6 py-3 font-medium text-gray-500">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtradas.map(s => {
-                const cfg = ESTADO_CONFIG[s.estado] ?? ESTADO_CONFIG.PENDIENTE;
-                const Icon = cfg.icon;
-                const siguientes = ESTADOS_SIGUIENTES[s.estado] ?? [];
-                return (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-3">
-                      <p className="font-medium text-gray-900 truncate max-w-xs">{s.producto?.descripcion}</p>
-                      <p className="text-xs text-gray-400 font-mono">{s.producto?.codigoProducto}</p>
-                    </td>
-                    <td className="px-6 py-3">
-                      {s.producto?.categoria && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
-                          style={{ backgroundColor: s.producto.categoria.color ?? '#6366f1' }}>
-                          {s.producto.categoria.nombre}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-3 text-right text-orange-600 font-medium">
-                      {s.producto?.stockActual} {s.producto?.unidadMedida}
-                    </td>
-                    <td className="px-6 py-3 text-right font-bold text-gray-900">
-                      {s.cantidad} {s.producto?.unidadMedida}
-                    </td>
-                    <td className="px-6 py-3 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
-                        s.prioridad === 'URGENTE'
-                          ? 'bg-red-50 text-red-700 border-red-200'
-                          : 'bg-gray-50 text-gray-600 border-gray-200'
-                      }`}>
-                        {s.prioridad}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>
-                        <Icon size={11} />
-                        {cfg.label}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-center">
-                      {siguientes.length > 0 && (
-                        <div className="flex gap-1 justify-center">
-                          {siguientes.map(sig => (
-                            <button key={sig} onClick={() => cambiarEstado(s.id, sig)}
-                              disabled={procesando === s.id}
-                              className={`px-2 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 ${
-                                sig === 'CANCELADA'
-                                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                                  : 'bg-gray-900 text-white hover:bg-gray-700'
-                              }`}>
-                              {ESTADO_CONFIG[sig]?.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </td>
+          {/* Notas */}
+          <input value={notas} onChange={e => setNotas(e.target.value)}
+            placeholder="Notas adicionales para la solicitud (opcional)..."
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+          {/* Tabla de productos */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-6 py-3 bg-gray-50 border-b border-gray-100">
+              <p className="text-xs font-medium text-gray-500">
+                Productos con stock bajo el mínimo — ordenados por stock más bajo primero
+              </p>
+            </div>
+            {loading ? (
+              <div className="p-6 space-y-2 animate-pulse">
+                {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded" />)}
+              </div>
+            ) : productosFiltrados.length === 0 ? (
+              <div className="p-12 text-center text-gray-400">
+                <CheckCircle size={32} className="mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No hay productos con stock bajo el mínimo 🎉</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-center px-4 py-3 font-medium text-gray-500 w-10">
+                      <input type="checkbox"
+                        checked={productosFiltrados.every(p => seleccionados[p.id])}
+                        onChange={() => {
+                          if (productosFiltrados.every(p => seleccionados[p.id])) {
+                            const next = { ...seleccionados };
+                            productosFiltrados.forEach(p => delete next[p.id]);
+                            setSeleccionados(next);
+                          } else {
+                            const next = { ...seleccionados };
+                            productosFiltrados.forEach(p => {
+                              if (!next[p.id]) {
+                                next[p.id] = {
+                                  ...p,
+                                  cantidadSolicitada: Math.max(p.stockMinimo - p.stockActual, 1),
+                                  prioridad: p.criticidad === 'CRITICO' ? 'URGENTE' : 'NORMAL',
+                                };
+                              }
+                            });
+                            setSeleccionados(next);
+                          }
+                        }}
+                        className="rounded" />
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500">Producto</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500">Categoría</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-500">Stock</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-500">Mínimo</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-500">Cantidad a pedir</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-500">Prioridad</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-500">Criticidad</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {productosFiltrados.map(p => {
+                    const sel = seleccionados[p.id];
+                    const pct = p.stockMinimo > 0 ? (p.stockActual / p.stockMinimo) * 100 : 100;
+                    return (
+                      <tr key={p.id}
+                        onClick={() => toggleSeleccion(p)}
+                        className={`cursor-pointer transition-colors ${
+                          sel ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'
+                        }`}>
+                        <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={!!sel}
+                            onChange={() => toggleSeleccion(p)} className="rounded" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-gray-900 truncate max-w-xs">{p.descripcion}</p>
+                          <p className="text-xs text-gray-400 font-mono">{p.codigoProducto}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          {p.categoria && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                              style={{ backgroundColor: p.categoria.color ?? '#6366f1' }}>
+                              {p.categoria.nombre}
+                            </span>
+                          )}
+                        </td>
+                        <td className={`px-4 py-3 text-right font-medium ${
+                          pct < 20 ? 'text-red-600' : 'text-orange-600'
+                        }`}>
+                          {p.stockActual} {p.unidadMedida}
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-500">
+                          {p.stockMinimo} {p.unidadMedida}
+                        </td>
+                        <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                          {sel ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <button onClick={() => updateCantidad(p.id, -1)}
+                                className="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
+                                <Minus size={12} />
+                              </button>
+                              <span className="w-10 text-center font-bold text-gray-900">{sel.cantidadSolicitada}</span>
+                              <button onClick={() => updateCantidad(p.id, 1)}
+                                className="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                          {sel ? (
+                            <select value={sel.prioridad}
+                              onChange={e => updatePrioridad(p.id, e.target.value as 'URGENTE' | 'NORMAL')}
+                              className={`px-2 py-1 rounded-full text-xs font-medium border-0 cursor-pointer ${
+                                sel.prioridad === 'URGENTE'
+                                  ? 'bg-red-50 text-red-700'
+                                  : 'bg-gray-50 text-gray-600'
+                              }`}>
+                              <option value="URGENTE">URGENTE</option>
+                              <option value="NORMAL">NORMAL</option>
+                            </select>
+                          ) : (
+                            <span className="text-gray-400 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            p.criticidad === 'CRITICO'
+                              ? 'bg-red-50 text-red-700'
+                              : 'bg-orange-50 text-orange-700'
+                          }`}>
+                            {p.criticidad}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'historial' && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-6 py-3 border-b border-gray-100">
+            <p className="text-sm font-medium text-gray-700">Historial de solicitudes</p>
+          </div>
+          {loading ? (
+            <div className="p-6 space-y-3 animate-pulse">
+              {[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-gray-100 rounded-lg" />)}
+            </div>
+          ) : solicitudes.length === 0 ? (
+            <div className="px-6 py-12 text-center text-gray-400">
+              <ClipboardList size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No hay solicitudes aún</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left px-6 py-3 font-medium text-gray-500">Producto</th>
+                  <th className="text-left px-6 py-3 font-medium text-gray-500">Categoría</th>
+                  <th className="text-right px-6 py-3 font-medium text-gray-500">Stock actual</th>
+                  <th className="text-right px-6 py-3 font-medium text-gray-500">Cantidad</th>
+                  <th className="text-center px-6 py-3 font-medium text-gray-500">Prioridad</th>
+                  <th className="text-center px-6 py-3 font-medium text-gray-500">Estado</th>
+                  <th className="text-center px-6 py-3 font-medium text-gray-500">Fecha</th>
+                  <th className="text-center px-6 py-3 font-medium text-gray-500">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {solicitudes.map(s => {
+                  const cfg = ESTADO_CONFIG[s.estado] ?? ESTADO_CONFIG.PENDIENTE;
+                  const Icon = cfg.icon;
+                  const siguientes = ESTADOS_SIGUIENTES[s.estado] ?? [];
+                  return (
+                    <tr key={s.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-3">
+                        <p className="font-medium text-gray-900 truncate max-w-xs">{s.producto?.descripcion}</p>
+                        <p className="text-xs text-gray-400 font-mono">{s.producto?.codigoProducto}</p>
+                      </td>
+                      <td className="px-6 py-3">
+                        {s.producto?.categoria && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                            style={{ backgroundColor: s.producto.categoria.color ?? '#6366f1' }}>
+                            {s.producto.categoria.nombre}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3 text-right text-orange-600 font-medium">
+                        {s.producto?.stockActual} {s.producto?.unidadMedida}
+                      </td>
+                      <td className="px-6 py-3 text-right font-bold text-gray-900">
+                        {s.cantidad} {s.producto?.unidadMedida}
+                      </td>
+                      <td className="px-6 py-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
+                          s.prioridad === 'URGENTE'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-gray-50 text-gray-600 border-gray-200'
+                        }`}>
+                          {s.prioridad}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>
+                          <Icon size={11} />
+                          {cfg.label}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-center text-gray-400 text-xs">
+                        {new Date(s.createdAt).toLocaleDateString('es-CL')}
+                      </td>
+                      <td className="px-6 py-3 text-center">
+                        {siguientes.length > 0 && (
+                          <div className="flex gap-1 justify-center">
+                            {siguientes.map(sig => (
+                              <button key={sig} onClick={() => cambiarEstado(s.id, sig)}
+                                disabled={procesando === s.id}
+                                className={`px-2 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 ${
+                                  sig === 'CANCELADA'
+                                    ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                    : 'bg-gray-900 text-white hover:bg-gray-700'
+                                }`}>
+                                {ESTADO_CONFIG[sig]?.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }
