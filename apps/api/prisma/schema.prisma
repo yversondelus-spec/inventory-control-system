@@ -75,10 +75,9 @@ enum EstadoUpload {
 
 enum EstadoSolicitud {
   PENDIENTE
-  ENVIADA
-  EN_PROCESO
+  EN_PROCESO_COMPRA
   COMPLETADA
-  CANCELADA
+  RECHAZADA
 }
 
 // ─────────────────────────────────────────
@@ -138,17 +137,17 @@ model Bodega {
 }
 
 model Proveedor {
-  id           String   @id @default(cuid())
-  codigo       String   @unique
-  nombre       String
-  contacto     String?
-  email        String?
-  telefono     String?
-  leadTimeDias Int      @default(21) @map("lead_time_dias")
-  confiabilidad Float?  @default(0.95)
-  activo       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(cuid())
+  codigo        String   @unique
+  nombre        String
+  contacto      String?
+  email         String?
+  telefono      String?
+  leadTimeDias  Int      @default(21) @map("lead_time_dias")
+  confiabilidad Float?   @default(0.95)
+  activo        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   productos Producto[]
 
@@ -174,12 +173,11 @@ model Producto {
   stockSeguridad Float      @default(0) @map("stock_seguridad")
   puntoPedido    Float      @default(0) @map("punto_pedido")
 
-  leadTimeDias   Int        @default(21) @map("lead_time_dias")
-
-  criticidad     Criticidad @default(MEDIO)
-  precioUnitario Float?     @map("precio_unitario")
-  demandaPromedio Float?    @map("demanda_promedio")
-  diasCobertura  Float?     @map("dias_cobertura")
+  leadTimeDias    Int        @default(21) @map("lead_time_dias")
+  criticidad      Criticidad @default(MEDIO)
+  precioUnitario  Float?     @map("precio_unitario")
+  demandaPromedio Float?     @map("demanda_promedio")
+  diasCobertura   Float?     @map("dias_cobertura")
   ultimoMovimiento DateTime? @map("ultimo_movimiento")
 
   activo    Boolean  @default(true)
@@ -330,21 +328,24 @@ model Alerta {
 // ─────────────────────────────────────────
 
 model SolicitudReposicion {
-  id         String          @id @default(cuid())
-  productoId String          @map("producto_id")
-  alertaId   String?         @map("alerta_id")
-  cantidad   Float
-  estado     EstadoSolicitud @default(PENDIENTE)
-  prioridad  String          @default("NORMAL")
-  notas      String?
-  creadoPor  String?         @map("creado_por")
-  createdAt  DateTime        @default(now()) @map("created_at")
-  updatedAt  DateTime        @updatedAt @map("updated_at")
+  id            String          @id @default(cuid())
+  grupoId       String          @default("") @map("grupo_id")
+  productoId    String          @map("producto_id")
+  alertaId      String?         @map("alerta_id")
+  cantidad      Float
+  estado        EstadoSolicitud @default(PENDIENTE)
+  prioridad     String          @default("NORMAL")
+  notas         String?
+  motivoRechazo String?         @map("motivo_rechazo")
+  creadoPor     String?         @map("creado_por")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
 
   producto Producto @relation(fields: [productoId], references: [id])
 
   @@index([productoId])
   @@index([estado])
+  @@index([grupoId])
   @@map("solicitudes_reposicion")
 }
 

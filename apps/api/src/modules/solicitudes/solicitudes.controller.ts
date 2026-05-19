@@ -14,7 +14,7 @@ export class SolicitudesController {
   findAll(@Query() query: Record<string, string>) {
     return this.solicitudesService.findMany({
       estado: query['estado'],
-      limit: query['limit'] ? parseInt(query['limit']) : 100,
+      limit: query['limit'] ? parseInt(query['limit']) : 500,
     });
   }
 
@@ -31,13 +31,26 @@ export class SolicitudesController {
     });
   }
 
+  @Post('grupo')
+  createGrupo(@Body() body: { items: any[] }, @Request() req: any) {
+    const userId = req.user?.sub ?? req.user?.id;
+    return this.solicitudesService.createGrupo(
+      body.items.map(item => ({ ...item, creadoPor: userId }))
+    );
+  }
+
   @Post('generar-desde-alertas')
   generarDesdeAlertas() {
     return this.solicitudesService.createFromAlertas();
   }
 
   @Put(':id/estado')
-  updateEstado(@Param('id') id: string, @Body() body: { estado: string; notas?: string }) {
-    return this.solicitudesService.updateEstado(id, body.estado as any, body.notas);
+  updateEstado(@Param('id') id: string, @Body() body: { estado: string; motivoRechazo?: string }) {
+    return this.solicitudesService.updateEstado(id, body.estado as any, body.motivoRechazo);
+  }
+
+  @Put('grupo/:grupoId/estado')
+  updateEstadoGrupo(@Param('grupoId') grupoId: string, @Body() body: { estado: string; motivoRechazo?: string }) {
+    return this.solicitudesService.updateEstadoGrupo(grupoId, body.estado as any, body.motivoRechazo);
   }
 }
