@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
 import {
   Package, AlertTriangle, TrendingDown, DollarSign, Activity, ShieldAlert,
-  type LucideIcon,
+  HardHat, ChevronRight, type LucideIcon,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -57,12 +57,25 @@ const CRITICIDAD_COLORS: Record<string, string> = {
   BAJO: '#22c55e',
 };
 
-const ESTADO_STYLES: Record<EstadoCritico, { border: string; bg: string; text: string; label: string; dot: string }> = {
-  QUIEBRE: { border: 'border-red-300', bg: 'bg-red-50', text: 'text-red-700', label: 'Quiebre de stock', dot: 'bg-red-500' },
-  CRITICO: { border: 'border-orange-300', bg: 'bg-orange-50', text: 'text-orange-700', label: 'Stock crítico', dot: 'bg-orange-500' },
-  BAJO: { border: 'border-yellow-300', bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Bajo mínimo', dot: 'bg-yellow-500' },
-  NORMAL: { border: 'border-green-300', bg: 'bg-green-50', text: 'text-green-700', label: 'Estable', dot: 'bg-green-500' },
+const ESTADO_STYLES: Record<EstadoCritico, {
+  border: string; bg: string; text: string; label: string; dot: string; barColor: string;
+}> = {
+  QUIEBRE: { border: 'border-red-200', bg: 'bg-red-50/60', text: 'text-red-700', label: 'Quiebre de stock', dot: 'bg-red-500', barColor: '#ef4444' },
+  CRITICO: { border: 'border-orange-200', bg: 'bg-orange-50/60', text: 'text-orange-700', label: 'Stock crítico', dot: 'bg-orange-500', barColor: '#f97316' },
+  BAJO: { border: 'border-amber-200', bg: 'bg-amber-50/50', text: 'text-amber-700', label: 'Bajo mínimo', dot: 'bg-amber-500', barColor: '#d97706' },
+  NORMAL: { border: 'border-gray-200', bg: 'bg-white', text: 'text-emerald-700', label: 'Estable', dot: 'bg-emerald-500', barColor: '#10b981' },
 };
+
+function formatDescripcion(desc: string) {
+  return desc
+    .toLowerCase()
+    .split(' ')
+    .map((word) => {
+      if (/^\d/.test(word) || word.length <= 2) return word.toUpperCase();
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
 
 function KPICard({ title, value, subtitle, icon: Icon, color }: {
   title: string; value: string | number; subtitle?: string;
@@ -82,48 +95,79 @@ function KPICard({ title, value, subtitle, icon: Icon, color }: {
   );
 }
 
-function CriticalProductCard({ p }: { p: ProductoCritico }) {
+function InsumoCard({ p, urgent }: { p: ProductoCritico; urgent: boolean }) {
   const style = ESTADO_STYLES[p.estado];
   const pct = p.stockMinimo > 0 ? Math.min(100, Math.round((p.stockActual / p.stockMinimo) * 100)) : 100;
 
   return (
-    <div className={`rounded-xl border-2 ${style.border} ${style.bg} p-5 flex flex-col gap-3`}>
+    <div
+      className={`rounded-2xl border ${style.border} ${style.bg} shadow-sm p-5 flex flex-col gap-3.5 transition-all hover:shadow-md ${
+        urgent ? 'ring-1 ring-inset ring-red-100' : ''
+      }`}
+    >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-mono text-gray-500">{p.codigoProducto}</p>
-          <p className="text-sm font-semibold text-gray-900 leading-snug mt-0.5">{p.descripcion}</p>
+        <div className="min-w-0">
+          <p className="text-[11px] font-mono text-gray-400 tracking-wide">{p.codigoProducto}</p>
+          <p className="text-[13.5px] font-semibold text-gray-900 leading-snug mt-1 line-clamp-2" title={p.descripcion}>
+            {formatDescripcion(p.descripcion)}
+          </p>
         </div>
-        <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold ${style.text} ${style.bg} border ${style.border}`}>
+        <span
+          className="shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold tracking-wide"
+          style={{ backgroundColor: `${CRITICIDAD_COLORS[p.criticidad]}14`, color: CRITICIDAD_COLORS[p.criticidad] }}
+        >
           {p.criticidad}
         </span>
       </div>
 
       <div className="flex items-baseline gap-1.5">
-        <span className="text-2xl font-bold text-gray-900">{p.stockActual.toLocaleString('es-CL')}</span>
-        <span className="text-xs text-gray-500">{p.unidadMedida} en stock</span>
+        <span className="text-[28px] font-bold text-gray-900 tracking-tight leading-none">
+          {p.stockActual.toLocaleString('es-CL')}
+        </span>
+        <span className="text-xs text-gray-400 font-medium">{p.unidadMedida} en stock</span>
       </div>
 
-      {/* Barra de nivel respecto al mínimo */}
-      <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden">
+      <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
         <div
-          className={`h-full rounded-full ${style.dot}`}
-          style={{ width: `${pct}%` }}
+          className="h-full rounded-full transition-all"
+          style={{ width: `${pct}%`, backgroundColor: style.barColor }}
         />
       </div>
 
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-gray-500">Mínimo: {p.stockMinimo.toLocaleString('es-CL')} {p.unidadMedida}</span>
-        <span className={`font-semibold ${style.text}`}>
+      <div className="flex items-center justify-between text-[12px]">
+        <span className="text-gray-400">Mín. {p.stockMinimo.toLocaleString('es-CL')} {p.unidadMedida}</span>
+        <span className="font-semibold" style={{ color: style.barColor }}>
           {p.diasCobertura !== null ? `${p.diasCobertura}d cobertura` : 'Sin datos'}
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5 pt-1 border-t border-gray-200/70">
+      <div className="flex items-center gap-1.5 pt-2.5 border-t border-gray-100">
         <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-        <span className={`text-xs font-medium ${style.text}`}>{style.label}</span>
+        <span className="text-[12px] font-medium text-gray-500">{style.label}</span>
         {p.demandaPromedio ? (
-          <span className="text-xs text-gray-400 ml-auto">~{p.demandaPromedio}/día</span>
+          <span className="text-[11px] text-gray-300 ml-auto">~{p.demandaPromedio}/día</span>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function EppUniformeRow({ p }: { p: ProductoCritico }) {
+  const style = ESTADO_STYLES[p.estado];
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />
+        <span className="text-[13px] text-gray-700 truncate" title={p.descripcion}>
+          {formatDescripcion(p.descripcion)}
+        </span>
+        <span className="text-[11px] text-gray-300 shrink-0">{p.categoria?.nombre}</span>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-[13px] font-medium text-gray-600">{p.stockActual} {p.unidadMedida}</span>
+        <span className="text-[11px] font-medium" style={{ color: style.barColor }}>
+          {p.diasCobertura !== null ? `${p.diasCobertura}d` : '—'}
+        </span>
       </div>
     </div>
   );
@@ -131,7 +175,8 @@ function CriticalProductCard({ p }: { p: ProductoCritico }) {
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [criticosDestacados, setCriticosDestacados] = useState<ProductoCritico[]>([]);
+  const [insumos, setInsumos] = useState<ProductoCritico[]>([]);
+  const [eppUniformes, setEppUniformes] = useState<ProductoCritico[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -144,26 +189,13 @@ export default function DashboardPage() {
       .then(([summaryRes, criticalRes, productsRes]) => {
         setSummary(summaryRes.data?.data ?? summaryRes.data);
 
-        const criticalItems = criticalRes.data?.data ?? criticalRes.data ?? [];
-        setCriticosDestacados(Array.isArray(criticalItems) ? criticalItems : []);
+        const criticalData = criticalRes.data?.data ?? criticalRes.data ?? {};
+        setInsumos(Array.isArray(criticalData.insumos) ? criticalData.insumos : []);
+        setEppUniformes(Array.isArray(criticalData.eppUniformes) ? criticalData.eppUniformes : []);
 
         const items = productsRes.data?.data?.data ?? productsRes.data?.data ?? productsRes.data ?? [];
         const all = Array.isArray(items) ? items : [];
-        const isBusinessCritical = (product: Producto) => {
-          const desc = product.descripcion.toUpperCase();
-          if (desc.includes('PLASTICO BASE') && desc.includes('0.35')) return true;
-          if (desc.includes('PLASTICO GORRO')) return true;
-          if (desc.includes('MANTA')) return true;
-          if (desc.includes('PAÑAL')) return true;
-          if (desc.includes('FILM')) return true;
-          if (desc.includes('ESQUINERO')) return true;
-          if (desc.includes('SKID') && desc.includes('MADERA') && desc.includes('CERTIFICADO')) return true;
-          return false;
-        };
-
-        const general = all.filter(
-          (p: Producto) => !['CRITICO', 'ALTO'].includes(p.criticidad) && !isBusinessCritical(p),
-        );
+        const general = all.filter((p: Producto) => !['CRITICO', 'ALTO'].includes(p.criticidad));
         setProductos(general);
       })
       .catch(console.error)
@@ -203,24 +235,63 @@ export default function DashboardPage() {
         <p className="text-gray-500 text-sm mt-1">Resumen operacional en tiempo real</p>
       </div>
 
-      {/* ── INSUMOS CRÍTICOS — sección fija destacada, sin ellos no hay ops ── */}
+      {/* ── INSUMOS — categoría Materiales Embalaje, sin esto no hay operación ── */}
       <div>
-        <div className="flex items-center gap-2 mb-4">
-          <ShieldAlert size={20} className="text-orange-500" />
-          <h2 className="text-lg font-bold text-gray-900">Insumos Críticos</h2>
-          <span className="text-xs text-gray-400">— sin estos productos, las operaciones se detienen</span>
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="p-1.5 rounded-lg bg-red-100">
+            <ShieldAlert size={16} className="text-red-600" />
+          </div>
+          <h2 className="text-[17px] font-bold text-gray-900">Insumos Críticos</h2>
+          <span className="text-[13px] text-gray-400">— materiales de embalaje, sin ellos no hay operación</span>
         </div>
 
-        {criticosDestacados.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 px-6 py-10 text-center text-gray-400 text-sm">
+        {insumos.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 px-6 py-10 text-center text-gray-400 text-sm">
             No hay insumos marcados como críticos todavía.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {criticosDestacados.map((p) => <CriticalProductCard key={p.id} p={p} />)}
+          <div className="space-y-5">
+            {insumos.filter((p) => p.estado === 'QUIEBRE' || p.estado === 'CRITICO').length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {insumos.filter((p) => p.estado === 'QUIEBRE' || p.estado === 'CRITICO').map((p) => (
+                  <InsumoCard key={p.id} p={p} urgent />
+                ))}
+              </div>
+            )}
+            {insumos.filter((p) => p.estado === 'BAJO' || p.estado === 'NORMAL').length > 0 && (
+              <details className="group" open={insumos.filter((p) => p.estado === 'QUIEBRE' || p.estado === 'CRITICO').length === 0}>
+                <summary className="flex items-center gap-1.5 text-[13px] font-medium text-gray-400 cursor-pointer select-none hover:text-gray-600 mb-3 list-none">
+                  <ChevronRight size={14} className="transition-transform group-open:rotate-90" />
+                  {insumos.filter((p) => p.estado === 'BAJO' || p.estado === 'NORMAL').length} insumo{insumos.filter((p) => p.estado === 'BAJO' || p.estado === 'NORMAL').length !== 1 ? 's' : ''} con stock estable
+                </summary>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {insumos.filter((p) => p.estado === 'BAJO' || p.estado === 'NORMAL').map((p) => (
+                    <InsumoCard key={p.id} p={p} urgent={false} />
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
       </div>
+
+      {eppUniformes.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2">
+            <HardHat size={14} className="text-gray-400" />
+            <h3 className="text-[13px] font-semibold text-gray-600">EPP y Uniformes</h3>
+            <span className="text-[11px] text-gray-300">— seguimiento de cumplimiento, no bloquea operaciones</span>
+            {eppUniformes.filter((p) => ['QUIEBRE', 'CRITICO', 'BAJO'].includes(p.estado)).length > 0 && (
+              <span className="ml-auto text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                {eppUniformes.filter((p) => ['QUIEBRE', 'CRITICO', 'BAJO'].includes(p.estado)).length} requieren atención
+              </span>
+            )}
+          </div>
+          <div className="divide-y divide-gray-50 max-h-56 overflow-y-auto">
+            {eppUniformes.map((p) => <EppUniformeRow key={p.id} p={p} />)}
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

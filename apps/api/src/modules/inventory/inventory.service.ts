@@ -130,44 +130,41 @@ export class InventoryService {
    * completos (con categoría, proveedor, conteo de alertas) solo
    * para quedarse con 7-8 en el navegador.
    */
-  async getCriticalProducts(limit = 12) {
-    const criticalProductWhere: Prisma.ProductoWhereInput = {
-      activo: true,
-      OR: [
-        { descripcion: { contains: 'PLASTICO BASE', mode: 'insensitive' } },
-        { descripcion: { contains: 'PLASTICO GORRO', mode: 'insensitive' } },
-        { descripcion: { contains: 'MANTA', mode: 'insensitive' } },
-        { descripcion: { contains: 'PAÑAL', mode: 'insensitive' } },
-        { descripcion: { contains: 'FILM', mode: 'insensitive' } },
-        { descripcion: { contains: 'ESQUINERO', mode: 'insensitive' } },
-        {
-          AND: [
-            { descripcion: { contains: 'SKID', mode: 'insensitive' } },
-            { descripcion: { contains: 'MADERA', mode: 'insensitive' } },
-            { descripcion: { contains: 'CERTIFICADO', mode: 'insensitive' } },
-          ],
+  async getCriticalProducts(limitInsumos = 12) {
+    const baseSelect = {
+      id: true,
+      codigoProducto: true,
+      descripcion: true,
+      unidadMedida: true,
+      stockActual: true,
+      stockMinimo: true,
+      demandaPromedio: true,
+      criticidad: true,
+      categoria: { select: { nombre: true, color: true } },
+    } as const;
+
+    const [insumosRaw, eppUniformesRaw] = await Promise.all([
+      this.prisma.producto.findMany({
+        where: {
+          activo: true,
+          criticidad: { in: ['CRITICO', 'ALTO'] },
+          categoria: { nombre: 'Materiales Embalaje' },
         },
-      ],
-    };
+        select: baseSelect,
+        take: limitInsumos * 4,
+      }),
+      this.prisma.producto.findMany({
+        where: {
+          activo: true,
+          criticidad: { in: ['CRITICO', 'ALTO'] },
+          categoria: { nombre: { in: ['EPP', 'Uniformes'] } },
+        },
+        select: baseSelect,
+        orderBy: { stockActual: 'asc' },
+      }),
+    ]);
 
-    const productos = await this.prisma.producto.findMany({
-      where: criticalProductWhere,
-      select: {
-        id: true,
-        codigoProducto: true,
-        descripcion: true,
-        unidadMedida: true,
-        stockActual: true,
-        stockMinimo: true,
-        demandaPromedio: true,
-        criticidad: true,
-        categoria: { select: { nombre: true, color: true } },
-      },
-      orderBy: [{ criticidad: 'asc' }, { stockActual: 'asc' }],
-      take: limit,
-    });
-
-    return productos.map((p) => {
+    const conEstado = (p: (typeof insumosRaw)[number]) => {
       const diasCobertura = p.demandaPromedio && p.demandaPromedio > 0
         ? Math.round((p.stockActual / p.demandaPromedio) * 10) / 10
         : p.stockMinimo > 0
@@ -180,7 +177,23 @@ export class InventoryService {
       else if (p.stockMinimo > 0 && p.stockActual < p.stockMinimo) estado = 'BAJO';
 
       return { ...p, diasCobertura, estado };
-    });
+    };
+
+    const ESTADO_PESO: Record<string, number> = { QUIEBRE: 0, CRITICO: 1, BAJO: 2, NORMAL: 3 };
+
+    const insumos = insumosRaw
+      .map(conEstado)
+      .sort((a, b) => {
+        const pesoA = ESTADO_PESO[a.estado];
+        const pesoB = ESTADO_PESO[b.estado];
+        if (pesoA !== pesoB) return pesoA - pesoB;
+        return (a.diasCobertura ?? Infinity) - (b.diasCobertura ?? Infinity);
+      })
+      .slice(0, limitInsumos);
+
+    const eppUniformes = eppUniformesRaw.map(conEstado);
+
+    return { insumos, eppUniformes };
   }
 
   async getDifferences(limit = 50) {
