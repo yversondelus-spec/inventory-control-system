@@ -20,6 +20,12 @@ export class InventoryController {
     return this.inventoryService.getSummary();
   }
 
+  @Get('critical')
+  @ApiOperation({ summary: 'Productos críticos para tarjetas destacadas del Dashboard' })
+  getCriticalProducts(@Query('limit') limit?: number) {
+    return this.inventoryService.getCriticalProducts(limit ? Number(limit) : undefined);
+  }
+
   @Get('differences')
   @ApiOperation({ summary: 'Diferencias detectadas entre stock físico y SAP' })
   getDifferences(@Query('limit') limit?: number) {

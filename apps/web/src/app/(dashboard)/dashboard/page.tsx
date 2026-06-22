@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
-import { Package, AlertTriangle, TrendingDown, DollarSign, Activity, ShieldAlert } from 'lucide-react';
+import {
+  Package, AlertTriangle, TrendingDown, DollarSign, Activity, ShieldAlert,
+  type LucideIcon,
+} from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface Summary {
@@ -17,6 +20,22 @@ interface Summary {
   alertasCriticas: number;
   capitalInmovilizado: number;
   coberturaPromedio: number;
+}
+
+type EstadoCritico = 'QUIEBRE' | 'CRITICO' | 'BAJO' | 'NORMAL';
+
+interface ProductoCritico {
+  id: string;
+  codigoProducto: string;
+  descripcion: string;
+  unidadMedida: string;
+  stockActual: number;
+  stockMinimo: number;
+  demandaPromedio: number | null;
+  criticidad: string;
+  diasCobertura: number | null;
+  estado: EstadoCritico;
+  categoria?: { nombre: string; color: string } | null;
 }
 
 interface Producto {
@@ -38,9 +57,16 @@ const CRITICIDAD_COLORS: Record<string, string> = {
   BAJO: '#22c55e',
 };
 
+const ESTADO_STYLES: Record<EstadoCritico, { border: string; bg: string; text: string; label: string; dot: string }> = {
+  QUIEBRE: { border: 'border-red-300', bg: 'bg-red-50', text: 'text-red-700', label: 'Quiebre de stock', dot: 'bg-red-500' },
+  CRITICO: { border: 'border-orange-300', bg: 'bg-orange-50', text: 'text-orange-700', label: 'Stock crítico', dot: 'bg-orange-500' },
+  BAJO: { border: 'border-yellow-300', bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Bajo mínimo', dot: 'bg-yellow-500' },
+  NORMAL: { border: 'border-green-300', bg: 'bg-green-50', text: 'text-green-700', label: 'Estable', dot: 'bg-green-500' },
+};
+
 function KPICard({ title, value, subtitle, icon: Icon, color }: {
   title: string; value: string | number; subtitle?: string;
-  icon: React.ElementType; color: string;
+  icon: LucideIcon; color: string;
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -56,25 +82,77 @@ function KPICard({ title, value, subtitle, icon: Icon, color }: {
   );
 }
 
+function CriticalProductCard({ p }: { p: ProductoCritico }) {
+  const style = ESTADO_STYLES[p.estado];
+  const pct = p.stockMinimo > 0 ? Math.min(100, Math.round((p.stockActual / p.stockMinimo) * 100)) : 100;
+
+  return (
+    <div className={`rounded-xl border-2 ${style.border} ${style.bg} p-5 flex flex-col gap-3`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-mono text-gray-500">{p.codigoProducto}</p>
+          <p className="text-sm font-semibold text-gray-900 leading-snug mt-0.5">{p.descripcion}</p>
+        </div>
+        <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold ${style.text} ${style.bg} border ${style.border}`}>
+          {p.criticidad}
+        </span>
+      </div>
+
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-2xl font-bold text-gray-900">{p.stockActual.toLocaleString('es-CL')}</span>
+        <span className="text-xs text-gray-500">{p.unidadMedida} en stock</span>
+      </div>
+
+      {/* Barra de nivel respecto al mínimo */}
+      <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden">
+        <div
+          className={`h-full rounded-full ${style.dot}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-gray-500">Mínimo: {p.stockMinimo.toLocaleString('es-CL')} {p.unidadMedida}</span>
+        <span className={`font-semibold ${style.text}`}>
+          {p.diasCobertura !== null ? `${p.diasCobertura}d cobertura` : 'Sin datos'}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-1.5 pt-1 border-t border-gray-200/70">
+        <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+        <span className={`text-xs font-medium ${style.text}`}>{style.label}</span>
+        {p.demandaPromedio ? (
+          <span className="text-xs text-gray-400 ml-auto">~{p.demandaPromedio}/día</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [criticos, setCriticos] = useState<Producto[]>([]);
+  const [criticosDestacados, setCriticosDestacados] = useState<ProductoCritico[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.inventory.summary()
-      .then((res) => setSummary(res.data?.data ?? res.data))
-      .catch(console.error);
+    Promise.all([
+      api.inventory.summary(),
+      api.inventory.critical({ limit: 12 }),
+      api.products.list({ limit: 50, sortBy: 'stockActual', sortOrder: 'asc' }),
+    ])
+      .then(([summaryRes, criticalRes, productsRes]) => {
+        setSummary(summaryRes.data?.data ?? summaryRes.data);
 
-    api.products.list({ limit: 50 })
-      .then((res) => {
-        const items = res.data?.data?.data ?? res.data?.data ?? res.data ?? [];
+        const criticalItems = criticalRes.data?.data ?? criticalRes.data ?? [];
+        setCriticosDestacados(Array.isArray(criticalItems) ? criticalItems : []);
+
+        const items = productsRes.data?.data?.data ?? productsRes.data?.data ?? productsRes.data ?? [];
         const all = Array.isArray(items) ? items : [];
-        const sorted = all
-          .filter((p: Producto) => ['CRITICO', 'ALTO'].includes(p.criticidad))
-          .sort((a: Producto, b: Producto) => a.stockActual - b.stockActual)
-          .slice(0, 8);
-        setCriticos(sorted);
+        // Excluimos los críticos/altos de la tabla general: ya tienen su propia
+        // sección destacada arriba y no deben competir por atención.
+        const general = all.filter((p: Producto) => !['CRITICO', 'ALTO'].includes(p.criticidad));
+        setProductos(general);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -113,6 +191,26 @@ export default function DashboardPage() {
         <p className="text-gray-500 text-sm mt-1">Resumen operacional en tiempo real</p>
       </div>
 
+      {/* ── INSUMOS CRÍTICOS — sección fija destacada, sin ellos no hay ops ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <ShieldAlert size={20} className="text-orange-500" />
+          <h2 className="text-lg font-bold text-gray-900">Insumos Críticos</h2>
+          <span className="text-xs text-gray-400">— sin estos productos, las operaciones se detienen</span>
+        </div>
+
+        {criticosDestacados.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 px-6 py-10 text-center text-gray-400 text-sm">
+            No hay insumos marcados como críticos todavía.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {criticosDestacados.map((p) => <CriticalProductCard key={p.id} p={p} />)}
+          </div>
+        )}
+      </div>
+
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <KPICard title="Total Productos" value={summary?.totalProductos ?? 0}
           subtitle={`${summary?.productosActivos ?? 0} activos`} icon={Package} color="bg-blue-500" />
@@ -184,13 +282,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Tabla general — el resto del inventario, sin protagonismo visual */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-800">Productos Críticos</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Ordenados por stock más bajo — requieren atención inmediata</p>
+          <h2 className="text-base font-semibold text-gray-800">Inventario General</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Productos no críticos — ordenados por stock más bajo</p>
         </div>
-        {criticos.length === 0 ? (
-          <div className="px-6 py-10 text-center text-gray-400 text-sm">No hay productos críticos 🎉</div>
+        {productos.length === 0 ? (
+          <div className="px-6 py-10 text-center text-gray-400 text-sm">Sin productos para mostrar.</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
@@ -205,11 +304,9 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {criticos.map((p) => {
+              {productos.slice(0, 20).map((p) => {
                 const pct = p.stockMinimo > 0 ? (p.stockActual / p.stockMinimo) * 100 : 100;
-                const rowColor = p.stockActual <= 0 ? 'bg-red-50' :
-                  pct < 20 ? 'bg-orange-50' :
-                  pct < 100 ? 'bg-yellow-50' : '';
+                const rowColor = p.stockActual <= 0 ? 'bg-red-50' : pct < 100 ? 'bg-yellow-50' : '';
                 return (
                   <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${rowColor}`}>
                     <td className="px-6 py-3 font-mono text-xs text-gray-600">{p.codigoProducto}</td>
@@ -222,10 +319,7 @@ export default function DashboardPage() {
                         </span>
                       )}
                     </td>
-                    <td className={`px-6 py-3 text-right font-medium ${
-                      p.stockActual <= 0 ? 'text-red-600' :
-                      pct < 20 ? 'text-orange-600' : 'text-yellow-600'
-                    }`}>
+                    <td className="px-6 py-3 text-right font-medium text-gray-700">
                       {p.stockActual} {p.unidadMedida}
                     </td>
                     <td className="px-6 py-3 text-right text-gray-500">{p.stockMinimo} {p.unidadMedida}</td>
@@ -245,6 +339,11 @@ export default function DashboardPage() {
               })}
             </tbody>
           </table>
+        )}
+        {productos.length > 20 && (
+          <div className="px-6 py-3 text-center text-xs text-gray-400 border-t border-gray-100">
+            Mostrando 20 de {productos.length} productos no críticos · ver todos en Inventario
+          </div>
         )}
       </div>
     </div>

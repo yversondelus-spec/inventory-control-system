@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateProductDto, ProductFilterDto, UpdateProductDto } from './dto/products.dto';
@@ -11,24 +11,88 @@ export class ProductsRepository {
   async findMany(filters: ProductFilterDto) {
     const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = filters;
     const skip = (page - 1) * limit;
+    const stockBajo = filters.stockBajo ?? false;
 
     const where = this.buildWhereClause(filters);
 
-    const [data, total] = await this.prisma.$transaction([
-      this.prisma.producto.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder },
-        include: {
-          categoria: { select: { id: true, nombre: true, color: true } },
-          proveedor: { select: { id: true, nombre: true, leadTimeDias: true } },
-          _count: { select: { alertas: { where: { estado: 'ACTIVA' } } } },
-        },
-      }),
-      this.prisma.producto.count({ where }),
+    if (!stockBajo) {
+      const [data, total] = await this.prisma.$transaction([
+        this.prisma.producto.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { [sortBy]: sortOrder },
+          include: {
+            categoria: { select: { id: true, nombre: true, color: true } },
+            proveedor: { select: { id: true, nombre: true, leadTimeDias: true } },
+            _count: { select: { alertas: { where: { estado: 'ACTIVA' } } } },
+          },
+        }),
+        this.prisma.producto.count({ where }),
+      ]);
+
+      return {
+        data,
+        meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      };
+    }
+
+    const orderColumn = this.mapSortBy(sortBy);
+    const orderDirection = sortOrder === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+    const rawWhere = this.buildRawWhereClause(filters);
+
+    const [rows, totalRows] = await this.prisma.$transaction([
+      this.prisma.$queryRaw<any[]>`
+        SELECT
+          p.*, c.id AS categoria_id, c.nombre AS categoria_nombre, c.color AS categoria_color,
+          pr.id AS proveedor_id, pr.nombre AS proveedor_nombre, pr.lead_time_dias AS proveedor_lead_time_dias,
+          (SELECT COUNT(*) FROM alertas a WHERE a.producto_id = p.id AND a.estado = 'ACTIVA') AS alertas_count
+        FROM productos p
+        LEFT JOIN categorias c ON c.id = p.categoria_id
+        LEFT JOIN proveedores pr ON pr.id = p.proveedor_id
+        WHERE ${rawWhere}
+        ORDER BY ${Prisma.raw(orderColumn)} ${orderDirection}
+        LIMIT ${limit}
+        OFFSET ${skip}
+      `,
+      this.prisma.$queryRaw<{ total: bigint }[]>`
+        SELECT COUNT(*) AS total
+        FROM productos p
+        WHERE ${rawWhere}
+      `,
     ]);
 
+    const data = rows.map((row) => ({
+      id: row.id,
+      codigoProducto: row.codigo_producto,
+      codigoSap: row.codigo_sap,
+      descripcion: row.descripcion,
+      unidadMedida: row.unidad_medida,
+      categoriaId: row.categoria_id,
+      proveedorId: row.proveedor_id,
+      stockActual: Number(row.stock_actual),
+      stockMinimo: Number(row.stock_minimo),
+      stockMaximo: Number(row.stock_maximo),
+      stockSeguridad: Number(row.stock_seguridad),
+      puntoPedido: Number(row.punto_pedido),
+      leadTimeDias: row.lead_time_dias,
+      criticidad: row.criticidad,
+      precioUnitario: row.precio_unitario,
+      demandaPromedio: row.demanda_promedio,
+      diasCobertura: row.dias_cobertura,
+      activo: row.activo,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      categoria: row.categoria_id
+        ? { id: row.categoria_id, nombre: row.categoria_nombre, color: row.categoria_color }
+        : null,
+      proveedor: row.proveedor_id
+        ? { id: row.proveedor_id, nombre: row.proveedor_nombre, leadTimeDias: row.proveedor_lead_time_dias }
+        : null,
+      _count: { alertas: Number(row.alertas_count ?? 0) },
+    }));
+
+    const total = Number(totalRows[0]?.total ?? 0);
     return {
       data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
@@ -77,18 +141,63 @@ export class ProductsRepository {
   }
 
   async findAtRisk() {
-    return this.prisma.producto.findMany({
-      where: {
-        activo: true,
-        puntoPedido: { gt: 0 },
-        stockActual: { lte: this.prisma.producto.fields.puntoPedido },
-      },
-      include: {
-        categoria: { select: { nombre: true } },
-        proveedor: { select: { nombre: true, leadTimeDias: true } },
-      },
-      orderBy: { diasCobertura: 'asc' },
-    });
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        codigo_producto: string;
+        descripcion: string;
+        unidad_medida: string;
+        stock_actual: number;
+        stock_minimo: number;
+        punto_pedido: number;
+        criticidad: string;
+        dias_cobertura: number | null;
+        categoria_nombre: string | null;
+        categoria_color: string | null;
+        proveedor_nombre: string | null;
+        proveedor_lead_time_dias: number | null;
+      }>
+    >`
+      SELECT
+        p.id,
+        p.codigo_producto,
+        p.descripcion,
+        p.unidad_medida,
+        p.stock_actual,
+        p.stock_minimo,
+        p.punto_pedido,
+        p.criticidad,
+        p.dias_cobertura,
+        c.nombre AS categoria_nombre,
+        c.color AS categoria_color,
+        pr.nombre AS proveedor_nombre,
+        pr.lead_time_dias AS proveedor_lead_time_dias
+      FROM productos p
+      LEFT JOIN categorias c ON c.id = p.categoria_id
+      LEFT JOIN proveedores pr ON pr.id = p.proveedor_id
+      WHERE p.activo = true
+        AND p.punto_pedido > 0
+        AND p.stock_actual <= p.punto_pedido
+      ORDER BY p.dias_cobertura ASC NULLS LAST
+    `;
+
+    return rows.map((row) => ({
+      id: row.id,
+      codigoProducto: row.codigo_producto,
+      descripcion: row.descripcion,
+      unidadMedida: row.unidad_medida,
+      stockActual: Number(row.stock_actual),
+      stockMinimo: Number(row.stock_minimo),
+      puntoPedido: Number(row.punto_pedido),
+      criticidad: row.criticidad,
+      diasCobertura: row.dias_cobertura,
+      categoria: row.categoria_nombre
+        ? { nombre: row.categoria_nombre, color: row.categoria_color }
+        : null,
+      proveedor: row.proveedor_nombre
+        ? { nombre: row.proveedor_nombre, leadTimeDias: row.proveedor_lead_time_dias }
+        : null,
+    }));
   }
 
   async create(data: CreateProductDto) {
@@ -168,15 +277,58 @@ export class ProductsRepository {
 
     if (filters.categoriaId) where.categoriaId = filters.categoriaId;
     if (filters.criticidad) where.criticidad = filters.criticidad;
-
-    if (filters.stockBajo) {
-      where.stockActual = { lte: this.prisma.producto.fields.stockMinimo };
-    }
-
     if (filters.conAlerta) {
       where.alertas = { some: { estado: 'ACTIVA' } };
     }
 
     return where;
+  }
+
+  private buildRawWhereClause(filters: ProductFilterDto) {
+    const conditions: Prisma.Sql[] = [Prisma.sql`p.activo = true`];
+
+    if (filters.search) {
+      const term = `%${filters.search}%`;
+      conditions.push(
+        Prisma.sql`(p.codigo_producto ILIKE ${term} OR p.descripcion ILIKE ${term} OR p.codigo_sap ILIKE ${term})`,
+      );
+    }
+
+    if (filters.categoriaId) {
+      conditions.push(Prisma.sql`p.categoria_id = ${filters.categoriaId}`);
+    }
+
+    if (filters.criticidad) {
+      conditions.push(Prisma.sql`p.criticidad = ${filters.criticidad}`);
+    }
+
+    if (filters.stockBajo) {
+      conditions.push(Prisma.sql`p.stock_actual <= p.stock_minimo`);
+    }
+
+    if (filters.conAlerta) {
+      conditions.push(
+        Prisma.sql`EXISTS (
+          SELECT 1 FROM alertas a
+          WHERE a.producto_id = p.id
+            AND a.estado = 'ACTIVA'
+        )`,
+      );
+    }
+
+    return Prisma.join(conditions, ' AND ');
+  }
+
+  private mapSortBy(sortBy: string) {
+    const columns: Record<string, string> = {
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+      codigoProducto: 'codigo_producto',
+      stockActual: 'stock_actual',
+      stockMinimo: 'stock_minimo',
+      criticidad: 'criticidad',
+    };
+
+    return columns[sortBy] ?? columns.createdAt;
   }
 }

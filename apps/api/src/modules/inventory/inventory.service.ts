@@ -13,6 +13,17 @@ export class InventoryService {
     private readonly calculator: InventoryCalculatorService,
   ) {}
 
+  /**
+   * Resumen ejecutivo del Dashboard.
+   *
+   * ANTES: traía TODOS los productos activos completos a memoria y hacía
+   * 5-6 pasadas con .filter()/.reduce() en Node. Con miles de productos
+   * esto es la causa principal de la lentitud al cargar el Dashboard.
+   *
+   * AHORA: todo se calcula con agregaciones SQL ($queryRaw / aggregate),
+   * la base de datos hace el trabajo pesado y solo viaja por red el
+   * resultado final (un puñado de números).
+   */
   async getSummary() {
     const [
       totalProductos,
@@ -20,7 +31,9 @@ export class InventoryService {
       alertasActivas,
       alertasCriticas,
       productosCriticos,
-    ] = await this.prisma.$transaction([
+      nivelesStock,
+      coberturaYCapital,
+    ] = await Promise.all([
       this.prisma.producto.count(),
       this.prisma.producto.count({ where: { activo: true } }),
       this.prisma.alerta.count({ where: { estado: 'ACTIVA' } }),
@@ -28,54 +41,129 @@ export class InventoryService {
       this.prisma.producto.count({
         where: { activo: true, criticidad: { in: ['CRITICO', 'ALTO'] } },
       }),
+      this.getNivelesStock(),
+      this.getCoberturaYCapital(),
     ]);
-
-    const productos = await this.prisma.producto.findMany({
-      where: { activo: true },
-      select: { stockActual: true, stockMinimo: true, precioUnitario: true, criticidad: true },
-    });
-
-    // 4 niveles de stock
-    const quiebreStock = productos.filter(p => p.stockActual <= 0).length;
-    const stockCritico = productos.filter(p =>
-      p.stockActual > 0 && p.stockMinimo > 0 && p.stockActual < p.stockMinimo * 0.2
-    ).length;
-    const stockBajo = productos.filter(p =>
-      p.stockMinimo > 0 && p.stockActual >= p.stockMinimo * 0.2 && p.stockActual < p.stockMinimo
-    ).length;
-    const stockNormal = productos.filter(p =>
-      p.stockMinimo === 0 || p.stockActual >= p.stockMinimo
-    ).length;
-
-    // Cobertura solo productos CRITICO/ALTO
-    const productosCriticosData = productos.filter(p =>
-      ['ALTO', 'CRITICO'].includes(p.criticidad) && p.stockMinimo > 0
-    );
-    const coberturaPromedio = productosCriticosData.length > 0
-      ? productosCriticosData.reduce((acc, p) =>
-          acc + (p.stockActual / p.stockMinimo) * 30, 0
-        ) / productosCriticosData.length
-      : 0;
-
-    // Capital inmovilizado
-    const capitalInmovilizado = productos.reduce((acc, p) =>
-      acc + p.stockActual * (p.precioUnitario ?? 0), 0
-    );
 
     return {
       totalProductos,
       productosActivos,
       productosCriticos,
-      quiebreStock,
-      stockCritico,
-      stockBajo,
-      stockNormal,
+      quiebreStock: nivelesStock.quiebreStock,
+      stockCritico: nivelesStock.stockCritico,
+      stockBajo: nivelesStock.stockBajo,
+      stockNormal: nivelesStock.stockNormal,
       alertasActivas,
       alertasCriticas,
-      capitalInmovilizado,
-      coberturaPromedio: Math.round(coberturaPromedio * 10) / 10,
+      capitalInmovilizado: coberturaYCapital.capitalInmovilizado,
+      coberturaPromedio: Math.round(coberturaYCapital.coberturaPromedio * 10) / 10,
       ultimaActualizacion: new Date().toISOString(),
     };
+  }
+
+  /**
+   * 4 niveles de stock calculados en SQL con CASE WHEN.
+   * Reemplaza los 4 .filter() secuenciales sobre el array completo.
+   */
+  private async getNivelesStock() {
+    const rows = await this.prisma.$queryRaw<
+      { quiebre_stock: bigint; stock_critico: bigint; stock_bajo: bigint; stock_normal: bigint }[]
+    >`
+      SELECT
+        COUNT(*) FILTER (WHERE stock_actual <= 0) AS quiebre_stock,
+        COUNT(*) FILTER (
+          WHERE stock_actual > 0 AND stock_minimo > 0 AND stock_actual < stock_minimo * 0.2
+        ) AS stock_critico,
+        COUNT(*) FILTER (
+          WHERE stock_minimo > 0 AND stock_actual >= stock_minimo * 0.2 AND stock_actual < stock_minimo
+        ) AS stock_bajo,
+        COUNT(*) FILTER (
+          WHERE stock_minimo = 0 OR stock_actual >= stock_minimo
+        ) AS stock_normal
+      FROM productos
+      WHERE activo = true
+    `;
+
+    const r = rows[0];
+    return {
+      quiebreStock: Number(r?.quiebre_stock ?? 0),
+      stockCritico: Number(r?.stock_critico ?? 0),
+      stockBajo: Number(r?.stock_bajo ?? 0),
+      stockNormal: Number(r?.stock_normal ?? 0),
+    };
+  }
+
+  /**
+   * Cobertura promedio (solo ALTO/CRITICO) y capital inmovilizado (todos),
+   * calculados con AVG/SUM en SQL en vez de reduce() en memoria.
+   */
+  private async getCoberturaYCapital() {
+    const [coberturaRows, capitalRows] = await Promise.all([
+      this.prisma.$queryRaw<{ cobertura_promedio: number | null }[]>`
+        SELECT AVG((stock_actual / stock_minimo) * 30) AS cobertura_promedio
+        FROM productos
+        WHERE activo = true
+          AND criticidad IN ('ALTO', 'CRITICO')
+          AND stock_minimo > 0
+      `,
+      this.prisma.$queryRaw<{ capital_inmovilizado: number | null }[]>`
+        SELECT SUM(stock_actual * COALESCE(precio_unitario, 0)) AS capital_inmovilizado
+        FROM productos
+        WHERE activo = true
+      `,
+    ]);
+
+    return {
+      coberturaPromedio: Number(coberturaRows[0]?.cobertura_promedio ?? 0),
+      capitalInmovilizado: Number(capitalRows[0]?.capital_inmovilizado ?? 0),
+    };
+  }
+
+  /**
+   * Productos críticos para las tarjetas destacadas del Dashboard.
+   * Trae solo los campos necesarios, solo criticidad CRITICO/ALTO,
+   * ordenados por cobertura más baja primero (los que necesitan
+   * atención inmediata arriba).
+   *
+   * Esto reemplaza el patrón del frontend de pedir 50 productos
+   * completos (con categoría, proveedor, conteo de alertas) solo
+   * para quedarse con 7-8 en el navegador.
+   */
+  async getCriticalProducts(limit = 12) {
+    const productos = await this.prisma.producto.findMany({
+      where: {
+        activo: true,
+        criticidad: { in: ['CRITICO', 'ALTO'] },
+      },
+      select: {
+        id: true,
+        codigoProducto: true,
+        descripcion: true,
+        unidadMedida: true,
+        stockActual: true,
+        stockMinimo: true,
+        demandaPromedio: true,
+        criticidad: true,
+        categoria: { select: { nombre: true, color: true } },
+      },
+      orderBy: [{ criticidad: 'asc' }, { stockActual: 'asc' }],
+      take: limit,
+    });
+
+    return productos.map((p) => {
+      const diasCobertura = p.demandaPromedio && p.demandaPromedio > 0
+        ? Math.round((p.stockActual / p.demandaPromedio) * 10) / 10
+        : p.stockMinimo > 0
+          ? Math.round((p.stockActual / p.stockMinimo) * 30 * 10) / 10
+          : null;
+
+      let estado: 'QUIEBRE' | 'CRITICO' | 'BAJO' | 'NORMAL' = 'NORMAL';
+      if (p.stockActual <= 0) estado = 'QUIEBRE';
+      else if (p.stockMinimo > 0 && p.stockActual < p.stockMinimo * 0.2) estado = 'CRITICO';
+      else if (p.stockMinimo > 0 && p.stockActual < p.stockMinimo) estado = 'BAJO';
+
+      return { ...p, diasCobertura, estado };
+    });
   }
 
   async getDifferences(limit = 50) {

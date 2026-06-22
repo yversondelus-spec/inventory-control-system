@@ -68,6 +68,8 @@ export const api = {
 
   inventory: {
     summary: () => apiClient.get('/inventory/summary'),
+    critical: (params?: Record<string, unknown>) =>
+      apiClient.get('/inventory/critical', { params }),
     differences: (limit?: number) =>
       apiClient.get('/inventory/differences', { params: { limit } }),
     recalculate: () => apiClient.post('/inventory/recalculate'),
