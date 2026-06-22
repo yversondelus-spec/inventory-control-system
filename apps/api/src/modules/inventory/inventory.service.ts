@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { subDays } from 'date-fns';
+import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { InventoryCalculatorService } from './inventory-calculator.service';
@@ -130,11 +131,27 @@ export class InventoryService {
    * para quedarse con 7-8 en el navegador.
    */
   async getCriticalProducts(limit = 12) {
+    const criticalProductWhere: Prisma.ProductoWhereInput = {
+      activo: true,
+      OR: [
+        { descripcion: { contains: 'PLASTICO BASE', mode: 'insensitive' } },
+        { descripcion: { contains: 'PLASTICO GORRO', mode: 'insensitive' } },
+        { descripcion: { contains: 'MANTA', mode: 'insensitive' } },
+        { descripcion: { contains: 'PAÑAL', mode: 'insensitive' } },
+        { descripcion: { contains: 'FILM', mode: 'insensitive' } },
+        { descripcion: { contains: 'ESQUINERO', mode: 'insensitive' } },
+        {
+          AND: [
+            { descripcion: { contains: 'SKID', mode: 'insensitive' } },
+            { descripcion: { contains: 'MADERA', mode: 'insensitive' } },
+            { descripcion: { contains: 'CERTIFICADO', mode: 'insensitive' } },
+          ],
+        },
+      ],
+    };
+
     const productos = await this.prisma.producto.findMany({
-      where: {
-        activo: true,
-        criticidad: { in: ['CRITICO', 'ALTO'] },
-      },
+      where: criticalProductWhere,
       select: {
         id: true,
         codigoProducto: true,

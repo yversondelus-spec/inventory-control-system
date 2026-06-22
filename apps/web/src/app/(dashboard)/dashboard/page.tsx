@@ -149,9 +149,21 @@ export default function DashboardPage() {
 
         const items = productsRes.data?.data?.data ?? productsRes.data?.data ?? productsRes.data ?? [];
         const all = Array.isArray(items) ? items : [];
-        // Excluimos los críticos/altos de la tabla general: ya tienen su propia
-        // sección destacada arriba y no deben competir por atención.
-        const general = all.filter((p: Producto) => !['CRITICO', 'ALTO'].includes(p.criticidad));
+        const isBusinessCritical = (product: Producto) => {
+          const desc = product.descripcion.toUpperCase();
+          if (desc.includes('PLASTICO BASE') && desc.includes('0.35')) return true;
+          if (desc.includes('PLASTICO GORRO')) return true;
+          if (desc.includes('MANTA')) return true;
+          if (desc.includes('PAÑAL')) return true;
+          if (desc.includes('FILM')) return true;
+          if (desc.includes('ESQUINERO')) return true;
+          if (desc.includes('SKID') && desc.includes('MADERA') && desc.includes('CERTIFICADO')) return true;
+          return false;
+        };
+
+        const general = all.filter(
+          (p: Producto) => !['CRITICO', 'ALTO'].includes(p.criticidad) && !isBusinessCritical(p),
+        );
         setProductos(general);
       })
       .catch(console.error)
