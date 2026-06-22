@@ -117,10 +117,10 @@ export class ProductFilterDto {
   @IsPositive()
   limit?: number = 20;
 
-  @ApiPropertyOptional({ default: 'createdAt' })
+  @ApiPropertyOptional({ default: 'codigoProducto' })
   @IsOptional()
   @IsString()
-  sortBy?: string = 'createdAt';
+  sortBy?: string = 'codigoProducto';
 
   @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
   @IsOptional()

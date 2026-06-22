@@ -199,6 +199,9 @@ model Producto {
   @@index([stockActual])
   @@index([categoriaId])
   @@index([activo])
+  @@index([activo, codigoProducto])
+  @@index([activo, categoriaId])
+  @@index([activo, criticidad])
   @@map("productos")
 }
 

@@ -9,7 +9,7 @@ export class ProductsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findMany(filters: ProductFilterDto) {
-    const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = filters;
+    const { page = 1, limit = 20, sortBy = 'codigoProducto', sortOrder = 'desc' } = filters;
     const skip = (page - 1) * limit;
     const stockBajo = filters.stockBajo ?? false;
 
@@ -24,7 +24,6 @@ export class ProductsRepository {
           orderBy: { [sortBy]: sortOrder },
           include: {
             categoria: { select: { id: true, nombre: true, color: true } },
-            proveedor: { select: { id: true, nombre: true, leadTimeDias: true } },
             _count: { select: { alertas: { where: { estado: 'ACTIVA' } } } },
           },
         }),
