@@ -34,6 +34,8 @@ export class InventoryService {
       productosCriticos,
       nivelesStock,
       coberturaYCapital,
+      resumenStock,
+      solicitudesPendientes,
     ] = await Promise.all([
       this.prisma.producto.count(),
       this.prisma.producto.count({ where: { activo: true } }),
@@ -44,6 +46,8 @@ export class InventoryService {
       }),
       this.getNivelesStock(),
       this.getCoberturaYCapital(),
+      this.getResumenStock(),
+      this.prisma.solicitudReposicion.count({ where: { estado: 'PENDIENTE' } }),
     ]);
 
     return {
@@ -58,6 +62,10 @@ export class InventoryService {
       alertasCriticas,
       capitalInmovilizado: coberturaYCapital.capitalInmovilizado,
       coberturaPromedio: Math.round(coberturaYCapital.coberturaPromedio * 10) / 10,
+      stockTotal: resumenStock.stockTotal,
+      stockEstableUnidades: resumenStock.stockEstable,
+      stockEstablePorcentaje: resumenStock.stockEstablePorcentaje,
+      solicitudesPendientes,
       ultimaActualizacion: new Date().toISOString(),
     };
   }
@@ -117,6 +125,31 @@ export class InventoryService {
     return {
       coberturaPromedio: Number(coberturaRows[0]?.cobertura_promedio ?? 0),
       capitalInmovilizado: Number(capitalRows[0]?.capital_inmovilizado ?? 0),
+    };
+  }
+
+  private async getResumenStock() {
+    const rows = await this.prisma.$queryRaw<{
+      stock_total: number | null;
+      stock_estable: number | null;
+    }[]>`
+      SELECT
+        SUM(stock_actual) AS stock_total,
+        SUM(stock_actual) FILTER (
+          WHERE stock_minimo = 0 OR stock_actual >= stock_minimo
+        ) AS stock_estable
+      FROM productos
+      WHERE activo = true
+    `;
+
+    const row = rows[0];
+    const stockTotal = Number(row?.stock_total ?? 0);
+    const stockEstable = Number(row?.stock_estable ?? 0);
+
+    return {
+      stockTotal,
+      stockEstable,
+      stockEstablePorcentaje: stockTotal > 0 ? Math.round((stockEstable / stockTotal) * 1000) / 10 : 0,
     };
   }
 

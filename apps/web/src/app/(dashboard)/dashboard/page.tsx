@@ -21,9 +21,59 @@ interface Summary {
   alertasCriticas: number;
   capitalInmovilizado: number;
   coberturaPromedio: number;
+  stockTotal?: number;
+  stockEstableUnidades?: number;
+  stockEstablePorcentaje?: number;
+  solicitudesPendientes?: number;
 }
 
 type EstadoCritico = 'QUIEBRE' | 'CRITICO' | 'BAJO' | 'NORMAL';
+
+type ActivityItem = {
+  title: string;
+  description: string;
+  time: string;
+  icon: LucideIcon;
+  accent: string;
+};
+
+const recentActivities: ActivityItem[] = [
+  {
+    title: 'Stock actualizado',
+    description: 'Plástico Gorro 250 x 0.35 MC Transparente',
+    time: 'hace 15 min',
+    icon: TrendingDown,
+    accent: '#185FA5',
+  },
+  {
+    title: 'Solicitud procesada',
+    description: 'LA 542 · 15/05/2026',
+    time: 'hace 32 min',
+    icon: Activity,
+    accent: '#10B981',
+  },
+  {
+    title: 'Insumo crítico detectado',
+    description: 'Zuncho Plástico Blanco',
+    time: 'hace 1 hora',
+    icon: AlertTriangle,
+    accent: '#EF9F27',
+  },
+  {
+    title: 'Archivo SAP cargado',
+    description: 'inventario_19062026.xlsx',
+    time: 'hace 2 horas',
+    icon: Package,
+    accent: '#8B5CF6',
+  },
+  {
+    title: 'Reporte generado',
+    description: 'Reporte de Inventario Diario',
+    time: 'hace 3 horas',
+    icon: ShieldAlert,
+    accent: '#0F766E',
+  },
+];
 
 interface ProductoCritico {
   id: string;
@@ -222,201 +272,170 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="p-8 space-y-7 bg-gray-50/40 min-h-screen">
-      <div>
-        <h1 className="text-[22px] font-semibold text-gray-900 tracking-tight">Dashboard ejecutivo</h1>
-        <p className="text-gray-500 text-[13px] mt-1">Resumen operacional en tiempo real</p>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <ShieldAlert size={15} className="text-red-500" />
-          <h2 className="text-[15px] font-semibold text-gray-900">Insumos críticos</h2>
-          <span className="text-[12px] text-gray-400">materiales de embalaje — sin ellos no hay operación</span>
+    <div className="p-8 space-y-7 bg-gray-50 min-h-screen">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Dashboard ejecutivo</p>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-950">Resumen operacional en tiempo real</h1>
         </div>
-
-        {insumos.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 px-6 py-10 text-center text-gray-400 text-sm">
-            No hay insumos marcados como críticos todavía.
-          </div>
-        ) : (
-          <>
-            {insumos.filter(p => p.estado === 'QUIEBRE' || p.estado === 'CRITICO').length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-[14px] font-semibold text-gray-900">Requieren atención inmediata</h3>
-                    <p className="text-[12px] text-gray-400 mt-0.5">
-                      {insumos.filter(p => p.estado === 'QUIEBRE' || p.estado === 'CRITICO').length} insumo{insumos.filter(p => p.estado === 'QUIEBRE' || p.estado === 'CRITICO').length !== 1 ? 's' : ''} en quiebre o stock crítico
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded-md">
-                    acción requerida hoy
-                  </span>
-                </div>
-                <div>
-                  {insumos.filter(p => p.estado === 'QUIEBRE' || p.estado === 'CRITICO').map((p) => (
-                    <UrgentRow key={p.id} p={p} onClick={() => goToProduct(p.id)} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {insumos.filter(p => p.estado === 'BAJO' || p.estado === 'NORMAL').length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100">
-                  <h3 className="text-[14px] font-semibold text-gray-900">Stock estable</h3>
-                  <p className="text-[12px] text-gray-400 mt-0.5">
-                    {insumos.filter(p => p.estado === 'BAJO' || p.estado === 'NORMAL').length} insumo{insumos.filter(p => p.estado === 'BAJO' || p.estado === 'NORMAL').length !== 1 ? 's' : ''} sin urgencia
-                  </p>
-                </div>
-                <div className="grid grid-cols-[100px_1fr_90px_120px_90px] px-5 py-2 bg-gray-50/80 text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                  <div>Código</div>
-                  <div>Insumo</div>
-                  <div className="text-right">Stock</div>
-                  <div className="px-3">Cobertura</div>
-                  <div className="text-right">Estado</div>
-                </div>
-                <div className="max-h-80 overflow-y-auto">
-                  {insumos.filter(p => p.estado === 'BAJO' || p.estado === 'NORMAL').map((p) => (
-                    <DenseRow key={p.id} p={p} onClick={() => goToProduct(p.id)} />
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 shadow-sm">
+            19 de junio, 2026
+          </span>
+          <button className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+            Exportar
+          </button>
+        </div>
       </div>
 
-      {eppUniformes.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <HardHat size={14} className="text-gray-400" />
-            <h2 className="text-[13px] font-semibold text-gray-500">EPP y Uniformes</h2>
-            <span className="text-[12px] text-gray-400">seguimiento de cumplimiento, no bloquea operaciones</span>
+      <div className="grid gap-4 xl:grid-cols-5">
+        <KPICard
+          title="Stock Total"
+          value={summary?.stockTotal?.toLocaleString('es-CL') ?? '0'}
+          subtitle="Todas las unidades"
+          icon={Package}
+          accent="#185FA5"
+        />
+        <KPICard
+          title="Stock Estable"
+          value={`${summary?.stockEstableUnidades?.toLocaleString('es-CL') ?? '0'} UN`}
+          subtitle={`${summary?.stockEstablePorcentaje?.toFixed(1) ?? '0.0'}% del total`}
+          icon={ShieldAlert}
+          accent="#22C55E"
+        />
+        <KPICard
+          title="Insumos Críticos"
+          value={summary?.productosCriticos ?? 0}
+          subtitle="ALTO / CRÍTICO"
+          icon={AlertTriangle}
+          accent="#EF9F27"
+        />
+        <KPICard
+          title="Cobertura Promedio"
+          value={`${summary?.coberturaPromedio?.toFixed(1) ?? '0.0'} días`}
+          subtitle="Últimos 30 días"
+          icon={Activity}
+          accent="#639922"
+        />
+        <KPICard
+          title="Solicitudes pendientes"
+          value={summary?.solicitudesPendientes ?? 0}
+          subtitle="Por procesar"
+          icon={HardHat}
+          accent="#0F766E"
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
+        <div className="space-y-4">
+          <div className="bg-white rounded-[32px] border border-slate-200 overflow-hidden shadow-sm">
+            <div className="flex flex-col gap-4 px-6 py-6 md:flex-row md:items-center md:justify-between md:px-7">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Insumos críticos</p>
+                <p className="text-sm text-slate-500 mt-1">Los insumos con menor cobertura están en la parte superior.</p>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-red-700">
+                Crítico
+              </span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {insumos.length === 0 ? (
+                <div className="px-6 py-12 text-center text-slate-400">No hay insumos críticos definidos.</div>
+              ) : (
+                insumos.map((p) => (
+                  <UrgentRow key={p.id} p={p} onClick={() => goToProduct(p.id)} />
+                ))
+              )}
+            </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="grid grid-cols-[100px_1fr_90px_120px_90px] px-5 py-2 bg-gray-50/80 text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+
+          <div className="bg-white rounded-[32px] border border-slate-200 overflow-hidden shadow-sm">
+            <div className="px-6 py-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Stock estable</p>
+                  <p className="text-sm text-slate-500 mt-1">Insumos con stock suficiente para operación.</p>
+                </div>
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-700">
+                  Estable
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-[110px_1fr_100px_120px_90px] gap-2 px-6 pb-4 text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-400">
               <div>Código</div>
-              <div>Ítem</div>
+              <div>Insumo</div>
               <div className="text-right">Stock</div>
-              <div className="px-3">Cobertura</div>
+              <div className="text-center">Cobertura</div>
               <div className="text-right">Estado</div>
             </div>
-            <div className="max-h-72 overflow-y-auto">
-              {eppUniformes.map((p) => (
+            <div className="max-h-80 overflow-y-auto">
+              {insumos.filter(p => p.estado === 'BAJO' || p.estado === 'NORMAL').map((p) => (
                 <DenseRow key={p.id} p={p} onClick={() => goToProduct(p.id)} />
               ))}
             </div>
           </div>
         </div>
-      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <KPICard title="Total productos" value={summary?.totalProductos ?? 0}
-          subtitle={`${summary?.productosActivos ?? 0} activos`} icon={Package} accent="#185FA5" />
-        <KPICard title="Productos críticos" value={summary?.productosCriticos ?? 0}
-          subtitle="Criticidad ALTO o CRÍTICO" icon={ShieldAlert} accent="#D85A30" />
-        <KPICard title="Quiebre de stock" value={summary?.quiebreStock ?? 0}
-          subtitle="Productos sin unidades" icon={TrendingDown} accent="#E24B4A" />
-        <KPICard title="Alertas activas" value={summary?.alertasActivas ?? 0}
-          subtitle={`${summary?.alertasCriticas ?? 0} críticas`} icon={AlertTriangle} accent="#EF9F27" />
-        <KPICard title="Cobertura críticos" value={`${summary?.coberturaPromedio?.toFixed(1) ?? 0} días`}
-          subtitle="Stock alto/crítico" icon={Activity} accent="#639922" />
-        <KPICard title="Capital inmovilizado"
-          value={`$${(summary?.capitalInmovilizado ?? 0).toLocaleString('es-CL')}`}
-          subtitle="Valor total del inventario" icon={DollarSign} accent="#534AB7" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-[14px] font-semibold text-gray-800 mb-5">Resumen de inventario</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={barData} barSize={32}>
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #f1f5f9', fontSize: 12 }} cursor={{ fill: '#f9fafb' }} />
-              <Bar dataKey="value" name="Cantidad" radius={[8, 8, 0, 0]}>
-                {barData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-[14px] font-semibold text-gray-800 mb-5">Estado del stock</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" innerRadius={56} outerRadius={88} paddingAngle={3} dataKey="value">
-                {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-              </Pie>
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #f1f5f9', fontSize: 12 }}
-                formatter={(value: number) => [`${value} productos`, '']} />
-              <Legend iconType="circle" iconSize={8}
-                formatter={(value) => <span style={{ fontSize: 12, color: '#4b5563' }}>{value}</span>} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-800">Inventario general</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Productos no críticos — ordenados por stock más bajo</p>
-        </div>
-        {productos.length === 0 ? (
-          <div className="px-6 py-10 text-center text-gray-400 text-sm">Sin productos para mostrar.</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50/80">
-              <tr>
-                <th className="text-left px-5 py-2.5 font-medium text-gray-400 text-[11px] uppercase tracking-wide">Código</th>
-                <th className="text-left px-5 py-2.5 font-medium text-gray-400 text-[11px] uppercase tracking-wide">Descripción</th>
-                <th className="text-left px-5 py-2.5 font-medium text-gray-400 text-[11px] uppercase tracking-wide">Categoría</th>
-                <th className="text-right px-5 py-2.5 font-medium text-gray-400 text-[11px] uppercase tracking-wide">Stock</th>
-                <th className="text-right px-5 py-2.5 font-medium text-gray-400 text-[11px] uppercase tracking-wide">Mínimo</th>
-                <th className="text-center px-5 py-2.5 font-medium text-gray-400 text-[11px] uppercase tracking-wide">Cobertura</th>
-                <th className="text-center px-5 py-2.5 font-medium text-gray-400 text-[11px] uppercase tracking-wide">Criticidad</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {productos.slice(0, 20).map((p) => {
-                const pct = p.stockMinimo > 0 ? (p.stockActual / p.stockMinimo) * 100 : 100;
-                const rowColor = p.stockActual <= 0 ? 'bg-red-50' : pct < 100 ? 'bg-yellow-50' : '';
-                return (
-                  <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${rowColor}`}>
-                    <td className="px-5 py-2.5 font-mono text-[11px] text-gray-500">{p.codigoProducto}</td>
-                    <td className="px-5 py-2.5 text-gray-800 max-w-xs truncate text-[13px]">{formatDescripcion(p.descripcion)}</td>
-                    <td className="px-5 py-2.5">
-                      {p.categoria && (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-medium text-white"
-                          style={{ backgroundColor: p.categoria.color ?? '#6366f1' }}>
-                          {p.categoria.nombre}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-2.5 text-right font-medium text-gray-700 text-[13px]">{p.stockActual} {p.unidadMedida}</td>
-                    <td className="px-5 py-2.5 text-right text-gray-400 text-[13px]">{p.stockMinimo} {p.unidadMedida}</td>
-                    <td className="px-5 py-2.5 text-center text-gray-400 text-[13px]">
-                      {p.stockMinimo > 0 ? `${Math.round((p.stockActual / p.stockMinimo) * 30)}d` : '—'}
-                    </td>
-                    <td className="px-5 py-2.5 text-center">
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium"
-                        style={{ backgroundColor: `${CRITICIDAD_COLORS[p.criticidad]}20`, color: CRITICIDAD_COLORS[p.criticidad] }}>
-                        {p.criticidad}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-        {productos.length > 20 && (
-          <div className="px-5 py-3 text-center text-[12px] text-gray-400 border-t border-gray-100">
-            Mostrando 20 de {productos.length} productos no críticos · ver todos en Inventario
+        <div className="space-y-4">
+          <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Cobertura de Stock</p>
+                <p className="text-sm text-slate-500 mt-1">Basado en el consumo promedio de los últimos 30 días.</p>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-semibold text-slate-900">{summary?.coberturaPromedio?.toFixed(1) ?? '0.0'}</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">días promedio</p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col items-center justify-center gap-4 md:flex-row md:items-center">
+              <div className="w-full max-w-[240px] h-[240px] mx-auto">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={88} paddingAngle={3} dataKey="value">
+                      {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-3 w-full">
+                {pieData.map((item) => (
+                  <div key={item.name} className="flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-sm font-medium text-slate-700">{item.name}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-900">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        )}
+
+          <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Actividad reciente</p>
+                <p className="text-sm text-slate-500 mt-1">Acciones y eventos recientes del inventario.</p>
+              </div>
+              <span className="text-xs uppercase tracking-[0.2em] text-slate-400">últimas 24h</span>
+            </div>
+            <div className="mt-5 space-y-3">
+              {recentActivities.map((item) => (
+                <div key={item.title} className="flex items-start gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: `${item.accent}20` }}>
+                    <item.icon size={18} style={{ color: item.accent }} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{item.title}</p>
+                    <p className="text-sm text-slate-500 mt-1 truncate">{item.description}</p>
+                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{item.time}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

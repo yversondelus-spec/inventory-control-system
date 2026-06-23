@@ -33,6 +33,17 @@ export default function InventoryPage() {
   const [search, setSearch] = useState('');
   const [pendingSearch, setPendingSearch] = useState('');
   const [total, setTotal] = useState(0);
+  const [filtroCriticidad, setFiltroCriticidad] = useState<'TODOS' | 'CRITICO' | 'ALTO' | 'MEDIO' | 'BAJO'>('TODOS');
+
+  const productosFiltrados = productos.filter((p) => {
+    const matchesSearch = p.descripcion.toLowerCase().includes(search.toLowerCase())
+      || p.codigoProducto.toLowerCase().includes(search.toLowerCase());
+    const matchesFilter = filtroCriticidad === 'TODOS' ? true : p.criticidad === filtroCriticidad;
+    return matchesSearch && matchesFilter;
+  });
+
+  const stockCritico = productos.filter((p) => p.stockActual <= p.stockMinimo && ['CRITICO', 'ALTO'].includes(p.criticidad)).length;
+  const sinAlertas = productos.filter((p) => (p._count?.alertas ?? 0) === 0).length;
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(pendingSearch.trim()), 240);
@@ -62,13 +73,45 @@ export default function InventoryPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+      <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Inventario</h1>
           <p className="text-sm text-slate-500 mt-2">{total} productos registrados</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 shadow-sm">
           Listado optimizado y actualizado en tiempo real
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-[1fr_auto] items-end mb-6">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Total</p>
+            <p className="mt-3 text-3xl font-semibold text-slate-900">{total}</p>
+            <p className="mt-2 text-sm text-slate-500">Productos registrados</p>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Bajo mínimo</p>
+            <p className="mt-3 text-3xl font-semibold text-amber-700">{stockCritico}</p>
+            <p className="mt-2 text-sm text-slate-500">Productos críticos</p>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Sin alertas</p>
+            <p className="mt-3 text-3xl font-semibold text-emerald-700">{sinAlertas}</p>
+            <p className="mt-2 text-sm text-slate-500">Productos sin incidencias</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {['TODOS', 'CRITICO', 'ALTO', 'MEDIO', 'BAJO'].map((tipo) => (
+            <button key={tipo} onClick={() => setFiltroCriticidad(tipo as any)}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                filtroCriticidad === tipo
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+              }`}>
+              {tipo === 'TODOS' ? 'Todas' : tipo}
+            </button>
+          ))}
         </div>
       </div>
 

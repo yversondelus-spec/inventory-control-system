@@ -84,6 +84,12 @@ export const api = {
     dismiss: (id: string) => apiClient.put(`/alerts/${id}/dismiss`),
   },
 
+  movements: {
+    list: (params?: Record<string, unknown>) =>
+      apiClient.get('/movements', { params }),
+    summary: () => apiClient.get('/movements/summary'),
+  },
+
   uploads: {
     create: (formData: FormData, onProgress?: (p: number) => void) =>
       apiClient.post('/uploads', formData, {

@@ -78,12 +78,8 @@ export default function ReportesPage() {
         const items = res.data?.data?.data ?? res.data?.data ?? res.data ?? [];
         setProductos(Array.isArray(items) ? items : []);
       } else if (tab === 'movimientos') {
-        const token = localStorage.getItem('accessToken');
-        const res = await fetch('${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/movements?limit=200', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const json = await res.json();
-        const items = json?.data?.data ?? json?.data ?? [];
+        const res = await api.movements.list({ limit: 200 });
+        const items = res.data?.data?.data ?? res.data?.data ?? res.data ?? [];
         setMovimientos(Array.isArray(items) ? items : []);
       }
     } catch { /* silent */ }
