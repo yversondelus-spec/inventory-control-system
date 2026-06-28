@@ -105,6 +105,11 @@ export class ProductFilterDto {
   @IsBoolean()
   conAlerta?: boolean;
 
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  includeAlertCount?: boolean = false;
+
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
   @IsNumber()
