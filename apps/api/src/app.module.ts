@@ -11,6 +11,7 @@ import { AuditMiddleware } from './common/middleware/audit.middleware';
 import { configuration } from './config/configuration';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MovementsModule } from './modules/movements/movements.module';
@@ -60,6 +61,7 @@ import { QueueModule } from './queue/queue.module';
     SuppliersModule,
     WarehousesModule,
     ReportsModule,
+    AuditModule,
     AnalyticsModule,
     SolicitudesModule,
     UsersModule,

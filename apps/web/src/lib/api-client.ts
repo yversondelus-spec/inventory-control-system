@@ -106,4 +106,24 @@ export const api = {
   analytics: {
     dashboard: () => apiClient.get('/analytics/dashboard'),
   },
+
+  reports: {
+    dailyInventory: () => apiClient.get('/reports/daily-inventory'),
+    movements: (days?: number) =>
+      apiClient.get('/reports/movements', { params: { days } }),
+    alerts: (days?: number) =>
+      apiClient.get('/reports/alerts', { params: { days } }),
+    criticalProducts: (days?: number) =>
+      apiClient.get('/reports/critical-products', { params: { days } }),
+    valuation: () => apiClient.get('/reports/valuation'),
+  },
+
+  audit: {
+    logs: (params?: Record<string, unknown>) =>
+      apiClient.get('/audit/logs', { params }),
+    summary: (days?: number) =>
+      apiClient.get('/audit/summary', { params: { days } }),
+    export: (params?: Record<string, unknown>) =>
+      apiClient.get('/audit/export', { params }),
+  },
 };

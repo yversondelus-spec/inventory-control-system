@@ -93,10 +93,11 @@ export default function AlertasPage() {
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Alertas</h1>
-          <p className="text-gray-500 text-sm mt-1">{alertas.length} alertas activas</p>
+          <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Gestión de alertas</p>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-950">Alertas activas</h1>
+          <p className="text-sm text-slate-500 mt-1">{alertas.length} alertas en el sistema</p>
         </div>
-        <button onClick={fetchAlertas} className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+        <button onClick={fetchAlertas} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
           Actualizar
         </button>
       </div>
@@ -106,22 +107,22 @@ export default function AlertasPage() {
           const cfg = PRIORIDAD_CONFIG[prioridad];
           return (
             <button key={prioridad} onClick={() => setFiltro(filtro === prioridad ? 'TODAS' : prioridad)}
-              className={`p-4 rounded-xl border text-left transition-all ${
-                filtro === prioridad ? cfg.bg + ' border-2' : 'bg-white border-gray-200 hover:border-gray-300'
+              className={`p-4 rounded-xl border shadow-sm text-left transition-all ${
+                filtro === prioridad ? cfg.bg + ' border-2' : 'bg-white border-slate-200 hover:border-slate-300'
               }`}>
-              <p className="text-xs font-medium text-gray-500">{cfg.label}</p>
-              <p className={`text-3xl font-bold mt-1 ${count > 0 ? cfg.color : 'text-gray-300'}`}>{count}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.2em]" style={{color: cfg.color.split('-')[1]}}>{cfg.label}</p>
+              <p className={`text-3xl font-semibold mt-2 ${count > 0 ? cfg.color : 'text-slate-300'}`}>{count}</p>
             </button>
           );
         })}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-3 border-b border-gray-100 flex gap-2 flex-wrap">
+      <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-3 border-b border-slate-100 flex gap-2 flex-wrap">
           {FILTROS.map(f => (
             <button key={f} onClick={() => setFiltro(f)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                filtro === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                filtro === f ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
               }`}>
               {f === 'TODAS'
                 ? `Todas (${alertas.length})`
@@ -132,23 +133,23 @@ export default function AlertasPage() {
 
         {loading ? (
           <div className="p-6 space-y-3 animate-pulse">
-            {[...Array(5)].map((_, i) => <div key={i} className="h-16 bg-gray-100 rounded-lg" />)}
+            {[...Array(5)].map((_, i) => <div key={i} className="h-16 bg-slate-100 rounded-lg" />)}
           </div>
         ) : filtradas.length === 0 ? (
-          <div className="px-6 py-12 text-center text-gray-400">
+          <div className="px-6 py-12 text-center text-slate-400">
             <CheckCircle size={32} className="mx-auto mb-2 opacity-40" />
             <p className="text-sm">
               No hay alertas {filtro !== 'TODAS' ? `de prioridad ${PRIORIDAD_CONFIG[filtro]?.label}` : 'activas'}
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-slate-100">
             {filtradas.map((alerta) => {
               const cfg = PRIORIDAD_CONFIG[alerta.prioridad] ?? PRIORIDAD_CONFIG.BAJA;
               const Icon = TIPO_ICON[alerta.tipo] ?? AlertTriangle;
               const isProcesando = procesando === alerta.id;
               return (
-                <div key={alerta.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                <div key={alerta.id} className="px-6 py-4 hover:bg-slate-50 transition-colors">
                   <div className="flex items-start gap-4">
                     <div className={`p-2 rounded-lg mt-0.5 ${cfg.bg}`}>
                       <Icon size={16} className={cfg.color} />
@@ -164,20 +165,20 @@ export default function AlertasPage() {
                             {alerta.producto.categoria.nombre}
                           </span>
                         )}
-                        <span className="text-xs text-gray-400 font-mono">{alerta.producto?.codigoProducto}</span>
+                        <span className="text-xs text-slate-400 font-mono">{alerta.producto?.codigoProducto}</span>
                       </div>
-                      <p className="text-sm font-medium text-gray-900">{alerta.producto?.descripcion}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{alerta.mensaje}</p>
+                      <p className="text-sm font-medium text-slate-900">{alerta.producto?.descripcion}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{alerta.mensaje}</p>
                       <div className="flex items-center gap-4 mt-1 flex-wrap">
-                        <span className="text-xs text-gray-400">
-                          Stock actual: <span className="font-medium text-gray-700">{alerta.producto?.stockActual} {alerta.producto?.unidadMedida}</span>
+                        <span className="text-xs text-slate-400">
+                          Stock actual: <span className="font-medium text-slate-700">{alerta.producto?.stockActual} {alerta.producto?.unidadMedida}</span>
                         </span>
                         {alerta.valorUmbral !== null && (
-                          <span className="text-xs text-gray-400">
-                            Umbral: <span className="font-medium text-gray-700">{alerta.valorUmbral}</span>
+                          <span className="text-xs text-slate-400">
+                            Umbral: <span className="font-medium text-slate-700">{alerta.valorUmbral}</span>
                           </span>
                         )}
-                        <span className="text-xs text-gray-300">
+                        <span className="text-xs text-slate-400">
                           {new Date(alerta.createdAt).toLocaleDateString('es-CL', {
                             day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
                           })}
@@ -187,12 +188,12 @@ export default function AlertasPage() {
                     <div className="flex gap-2 shrink-0">
                       {alerta.estado === 'ACTIVA' && (
                         <button onClick={() => acknowledge(alerta.id)} disabled={isProcesando}
-                          className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors">
                           Reconocer
                         </button>
                       )}
                       <button onClick={() => resolve(alerta.id)} disabled={isProcesando}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50 transition-colors">
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 transition-colors">
                         Resolver
                       </button>
                     </div>

@@ -312,12 +312,13 @@ export default function SolicitudesPage() {
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Solicitudes de Reposición</h1>
-          <p className="text-gray-500 text-sm mt-1">{grupos.length} solicitudes en total</p>
+          <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Gestión de solicitudes</p>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-950">Solicitudes de Reposición</h1>
+          <p className="text-sm text-slate-500 mt-1">{grupos.length} solicitudes en total</p>
         </div>
         <button onClick={() => setModalAbierto(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium text-white transition-colors"
-          style={{ backgroundColor: '#1a6ebf' }}>
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors shadow-sm"
+          style={{ backgroundColor: '#185FA5' }}>
           <Plus size={16} />
           Nueva Solicitud
         </button>
@@ -326,27 +327,27 @@ export default function SolicitudesPage() {
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Pendientes',           value: summary.pendientes,      color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
-          { label: 'En proceso de compra', value: summary.enProcesoCompra, color: 'text-blue-600',   bg: 'bg-blue-50 border-blue-200' },
-          { label: 'Completadas',          value: summary.completadas,     color: 'text-green-600',  bg: 'bg-green-50 border-green-200' },
-          { label: 'Rechazadas',           value: summary.rechazadas,      color: 'text-red-600',    bg: 'bg-red-50 border-red-200' },
+          { label: 'Pendientes',           value: summary.pendientes,      color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' },
+          { label: 'En proceso de compra', value: summary.enProcesoCompra, color: 'text-blue-700',   bg: 'bg-blue-50 border-blue-200' },
+          { label: 'Completadas',          value: summary.completadas,     color: 'text-emerald-700',  bg: 'bg-emerald-50 border-emerald-200' },
+          { label: 'Rechazadas',           value: summary.rechazadas,      color: 'text-red-700',    bg: 'bg-red-50 border-red-200' },
         ].map((k, i) => (
-          <div key={i} className={`rounded-xl border p-4 ${k.bg}`}>
-            <p className="text-xs font-medium text-gray-500">{k.label}</p>
-            <p className={`text-3xl font-bold mt-1 ${k.color}`}>{k.value}</p>
+          <div key={i} className={`rounded-xl border shadow-sm p-5 ${k.bg}`}>
+            <p className="text-[11px] uppercase tracking-[0.24em] font-medium text-slate-400">{k.label}</p>
+            <p className={`text-3xl font-semibold mt-3 ${k.color}`}>{k.value}</p>
           </div>
         ))}
       </div>
 
       {/* Historial */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-800">Historial de Solicitudes</h2>
+      <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">Historial de Solicitudes</h2>
           <div className="flex gap-2">
             {['TODOS', 'PENDIENTE', 'EN_PROCESO_COMPRA', 'COMPLETADA', 'RECHAZADA'].map(f => (
               <button key={f} onClick={() => setFiltroHistorial(f)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  filtroHistorial === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  filtroHistorial === f ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                 }`}>
                 {f === 'TODOS' ? 'Todas' : ESTADO_CONFIG[f]?.label}
               </button>
@@ -356,16 +357,16 @@ export default function SolicitudesPage() {
 
         {loading ? (
           <div className="p-6 space-y-3 animate-pulse">
-            {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-lg" />)}
+            {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-slate-100 rounded-lg" />)}
           </div>
         ) : gruposFiltrados.length === 0 ? (
-          <div className="px-6 py-12 text-center text-gray-400">
+          <div className="px-6 py-12 text-center text-slate-400">
             <ClipboardList size={32} className="mx-auto mb-2 opacity-30" />
             <p className="text-sm">No hay solicitudes aún</p>
             <p className="text-xs mt-1">Haz click en "Nueva Solicitud" para crear una</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-slate-100">
             {gruposFiltrados.map((grupo, idx) => {
               const cfg = ESTADO_CONFIG[grupo.estado] ?? ESTADO_CONFIG.PENDIENTE;
               const Icon = cfg.icon;
@@ -399,12 +400,12 @@ export default function SolicitudesPage() {
                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">URGENTE</span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-0.5">{fecha} — {hora} · {grupo.items.length} producto(s)</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{fecha} — {hora} · {grupo.items.length} producto(s)</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => generarPDFGrupo(grupo, nro)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors">
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors">
                         <FileText size={13} />
                         PDF
                       </button>
@@ -415,7 +416,7 @@ export default function SolicitudesPage() {
                           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
                             sig === 'RECHAZADA'
                               ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
-                              : 'bg-gray-900 text-white hover:bg-gray-700'
+                              : 'bg-slate-900 text-white hover:bg-slate-700'
                           }`}>
                           {ESTADO_CONFIG[sig]?.label}
                         </button>
@@ -435,7 +436,7 @@ export default function SolicitudesPage() {
                         Confirmar rechazo
                       </button>
                       <button onClick={() => setRechazandoGrupo(null)}
-                        className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-200">
+                        className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-200">
                         Cancelar
                       </button>
                     </div>
@@ -444,21 +445,21 @@ export default function SolicitudesPage() {
                   {/* Items del grupo */}
                   {expandido && (
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-slate-50">
                         <tr>
-                          <th className="text-left px-6 py-2 font-medium text-gray-400 text-xs">Producto</th>
-                          <th className="text-left px-4 py-2 font-medium text-gray-400 text-xs">Categoría</th>
-                          <th className="text-right px-4 py-2 font-medium text-gray-400 text-xs">Stock actual</th>
-                          <th className="text-right px-4 py-2 font-medium text-gray-400 text-xs">Cantidad solicitada</th>
-                          <th className="text-center px-4 py-2 font-medium text-gray-400 text-xs">Prioridad</th>
+                          <th className="text-left px-6 py-2 font-medium text-slate-400 text-xs">Producto</th>
+                          <th className="text-left px-4 py-2 font-medium text-slate-400 text-xs">Categoría</th>
+                          <th className="text-right px-4 py-2 font-medium text-slate-400 text-xs">Stock actual</th>
+                          <th className="text-right px-4 py-2 font-medium text-slate-400 text-xs">Cantidad solicitada</th>
+                          <th className="text-center px-4 py-2 font-medium text-slate-400 text-xs">Prioridad</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-50">
+                      <tbody className="divide-y divide-slate-50">
                         {grupo.items.map(s => (
-                          <tr key={s.id} className="hover:bg-gray-50">
+                          <tr key={s.id} className="hover:bg-slate-50">
                             <td className="px-6 py-2.5">
-                              <p className="font-medium text-gray-900 truncate max-w-xs text-sm">{s.producto?.descripcion}</p>
-                              <p className="text-xs text-gray-400 font-mono">{s.producto?.codigoProducto}</p>
+                              <p className="font-medium text-slate-900 truncate max-w-xs text-sm">{s.producto?.descripcion}</p>
+                              <p className="text-xs text-slate-400 font-mono">{s.producto?.codigoProducto}</p>
                             </td>
                             <td className="px-4 py-2.5">
                               {s.producto?.categoria && (
@@ -471,12 +472,12 @@ export default function SolicitudesPage() {
                             <td className="px-4 py-2.5 text-right text-orange-600 font-medium text-sm">
                               {s.producto?.stockActual} {s.producto?.unidadMedida}
                             </td>
-                            <td className="px-4 py-2.5 text-right font-bold text-gray-900 text-sm">
+                            <td className="px-4 py-2.5 text-right font-bold text-slate-900 text-sm">
                               {s.cantidad} {s.producto?.unidadMedida}
                             </td>
                             <td className="px-4 py-2.5 text-center">
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                s.prioridad === 'URGENTE' ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
+                                s.prioridad === 'URGENTE' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600'
                               }`}>
                                 {s.prioridad}
                               </span>
@@ -497,14 +498,14 @@ export default function SolicitudesPage() {
       {modalAbierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col mx-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Nueva Solicitud de Reposición</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{productos.length} productos con stock bajo el mínimo</p>
+                <h2 className="text-lg font-semibold text-slate-900">Nueva Solicitud de Reposición</h2>
+                <p className="text-xs text-slate-400 mt-0.5">{productos.length} productos con stock bajo el mínimo</p>
               </div>
               <button onClick={() => { setModalAbierto(false); setSeleccionados({}); setNotas(''); }}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-                <X size={18} className="text-gray-500" />
+                className="p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                <X size={18} className="text-slate-500" />
               </button>
             </div>
 
@@ -514,26 +515,26 @@ export default function SolicitudesPage() {
                   {(['TODOS', 'CRITICO', 'ALTO'] as const).map(f => (
                     <button key={f} onClick={() => setFiltroNivel(f)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filtroNivel === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        filtroNivel === f ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                       }`}>
                       {f === 'TODOS' ? `Todos (${productos.length})` : `${f} (${productos.filter(p => p.criticidad === f).length})`}
                     </button>
                   ))}
                 </div>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-slate-500">
                   {cantidadSeleccionada > 0 ? `${cantidadSeleccionada} seleccionado(s)` : 'Ninguno seleccionado'}
                 </span>
               </div>
 
               <input value={notas} onChange={e => setNotas(e.target.value)}
                 placeholder="Notas adicionales (opcional)..."
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
 
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-slate-50">
                     <tr>
-                      <th className="text-center px-4 py-3 font-medium text-gray-500 w-10">
+                      <th className="text-center px-4 py-3 font-medium text-slate-500 w-10">
                         <input type="checkbox"
                           checked={productosFiltrados.length > 0 && productosFiltrados.every(p => seleccionados[p.id])}
                           onChange={() => {
@@ -557,28 +558,28 @@ export default function SolicitudesPage() {
                           }}
                           className="rounded" />
                       </th>
-                      <th className="text-left px-4 py-3 font-medium text-gray-500">Producto</th>
-                      <th className="text-left px-4 py-3 font-medium text-gray-500">Categoría</th>
-                      <th className="text-right px-4 py-3 font-medium text-gray-500">Stock</th>
-                      <th className="text-right px-4 py-3 font-medium text-gray-500">Mínimo</th>
-                      <th className="text-center px-4 py-3 font-medium text-gray-500">Cantidad</th>
-                      <th className="text-center px-4 py-3 font-medium text-gray-500">Prioridad</th>
-                      <th className="text-center px-4 py-3 font-medium text-gray-500">Criticidad</th>
+                      <th className="text-left px-4 py-3 font-medium text-slate-500">Producto</th>
+                      <th className="text-left px-4 py-3 font-medium text-slate-500">Categoría</th>
+                      <th className="text-right px-4 py-3 font-medium text-slate-500">Stock</th>
+                      <th className="text-right px-4 py-3 font-medium text-slate-500">Mínimo</th>
+                      <th className="text-center px-4 py-3 font-medium text-slate-500">Cantidad</th>
+                      <th className="text-center px-4 py-3 font-medium text-slate-500">Prioridad</th>
+                      <th className="text-center px-4 py-3 font-medium text-slate-500">Criticidad</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-slate-100">
                     {productosFiltrados.map(p => {
                       const sel = seleccionados[p.id];
                       const pct = p.stockMinimo > 0 ? (p.stockActual / p.stockMinimo) * 100 : 100;
                       return (
                         <tr key={p.id} onClick={() => toggleSeleccion(p)}
-                          className={`cursor-pointer transition-colors ${sel ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}>
+                          className={`cursor-pointer transition-colors ${sel ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-slate-50'}`}>
                           <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                             <input type="checkbox" checked={!!sel} onChange={() => toggleSeleccion(p)} className="rounded" />
                           </td>
                           <td className="px-4 py-3">
-                            <p className="font-medium text-gray-900 truncate max-w-xs">{p.descripcion}</p>
-                            <p className="text-xs text-gray-400 font-mono">{p.codigoProducto}</p>
+                            <p className="font-medium text-slate-900 truncate max-w-xs">{p.descripcion}</p>
+                            <p className="text-xs text-slate-400 font-mono">{p.codigoProducto}</p>
                           </td>
                           <td className="px-4 py-3">
                             {p.categoria && (
@@ -591,33 +592,33 @@ export default function SolicitudesPage() {
                           <td className={`px-4 py-3 text-right font-medium ${pct < 20 ? 'text-red-600' : 'text-orange-600'}`}>
                             {p.stockActual} {p.unidadMedida}
                           </td>
-                          <td className="px-4 py-3 text-right text-gray-500">{p.stockMinimo} {p.unidadMedida}</td>
+                          <td className="px-4 py-3 text-right text-slate-500">{p.stockMinimo} {p.unidadMedida}</td>
                           <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                             {sel ? (
                               <div className="flex items-center justify-center gap-2">
                                 <button onClick={() => updateCantidad(p.id, -1)}
-                                  className="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
+                                  className="w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center">
                                   <Minus size={12} />
                                 </button>
                                 <span className="w-10 text-center font-bold">{sel.cantidadSolicitada}</span>
                                 <button onClick={() => updateCantidad(p.id, 1)}
-                                  className="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center">
+                                  className="w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center">
                                   <Plus size={12} />
                                 </button>
                               </div>
-                            ) : <span className="text-gray-400 text-xs">—</span>}
+                            ) : <span className="text-slate-400 text-xs">—</span>}
                           </td>
                           <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                             {sel ? (
                               <select value={sel.prioridad}
                                 onChange={e => updatePrioridad(p.id, e.target.value as 'URGENTE' | 'NORMAL')}
                                 className={`px-2 py-1 rounded-full text-xs font-medium border-0 cursor-pointer ${
-                                  sel.prioridad === 'URGENTE' ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
+                                  sel.prioridad === 'URGENTE' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600'
                                 }`}>
                                 <option value="URGENTE">URGENTE</option>
                                 <option value="NORMAL">NORMAL</option>
                               </select>
-                            ) : <span className="text-gray-400 text-xs">—</span>}
+                            ) : <span className="text-slate-400 text-xs">—</span>}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -634,15 +635,15 @@ export default function SolicitudesPage() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
+            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50 rounded-b-2xl">
               <button onClick={() => { setModalAbierto(false); setSeleccionados({}); setNotas(''); }}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-200 transition-colors">
+                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors">
                 Cancelar
               </button>
               <button onClick={generarSolicitudes}
                 disabled={procesando === 'generar' || cantidadSeleccionada === 0}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 transition-colors"
-                style={{ backgroundColor: cantidadSeleccionada === 0 ? '#9ca3af' : '#1a6ebf' }}>
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40 transition-colors"
+                style={{ backgroundColor: cantidadSeleccionada === 0 ? '#cbd5e1' : '#185FA5' }}>
                 <Plus size={15} />
                 {procesando === 'generar' ? 'Generando...' : `Generar Solicitud (${cantidadSeleccionada} productos)`}
               </button>
